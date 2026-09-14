@@ -7,7 +7,7 @@ export async function renderQueueDrawer(drawerContainer, onClose) {
 
   drawerContainer.innerHTML = `
     <div class="drawer-header">
-      <h3 style="font-size: 18px; font-weight: 800; color: #F8FAFC;">
+      <h3 style="font-size: 18px; font-weight: 800; color: #0F172A;">
         Cola de Sincronización Offline (${pending.length})
       </h3>
       <button class="drawer-close" id="btn-close-drawer">✕</button>
@@ -26,7 +26,7 @@ export async function renderQueueDrawer(drawerContainer, onClose) {
 
         <div style="display: flex; flex-direction: column; gap: 10px; max-height: 260px; overflow-y: auto;">
           ${pending.map(p => `
-            <div style="background: #0F172A; border: 1px solid var(--color-border); border-radius: 8px; padding: 12px;">
+            <div style="background: #F8FAFC; border: 1px solid var(--color-border); border-radius: 8px; padding: 12px;">
               <div style="display: flex; justify-content: space-between; align-items: center;">
                 <span class="badge ${p.activity === 'CONCRETE' ? 'badge-provisional' : 'badge-pass'}" style="font-size: 10px;">
                   ${p.activity}
@@ -35,7 +35,7 @@ export async function renderQueueDrawer(drawerContainer, onClose) {
                   ${new Date(p.queued_at).toLocaleTimeString('es-PE')}
                 </span>
               </div>
-              <div style="font-size: 13px; font-weight: 700; color: #F8FAFC; margin-top: 6px;">
+              <div style="font-size: 13px; font-weight: 700; color: #0F172A; margin-top: 6px;">
                 Progresiva ${p.chainage} | Paño ${p.panel}
               </div>
               <div style="font-size: 11px; color: var(--color-text-muted); margin-top: 2px;">

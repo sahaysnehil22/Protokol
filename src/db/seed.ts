@@ -27,9 +27,9 @@ export function seedDatabase(db: DatabaseSync): void {
 
   const teamMembers = [
     // Execution Team
-    { id: 'tech_david_valdez', name: 'Ing. David Valdez Ochoa', role: 'Quality Specialist', phone: '+51966000001', device: 'dvc_pilot_david_01' },
-    { id: 'tech_resident', name: 'Ing. Carlos Mendoza (Residente)', role: 'Site Resident', phone: '+51966000002', device: 'dvc_pilot_res_02' },
-    { id: 'tech_soils', name: 'Ing. Marco Quispe (Suelos)', role: 'Soils Specialist', phone: '+51966000003', device: 'dvc_pilot_soils_03' },
+    { id: 'tech_quality_spec', name: 'Ing. Especialista de Calidad', role: 'Quality Specialist', phone: '+51966000001', device: 'dvc_pilot_qa_01' },
+    { id: 'tech_resident', name: 'Ing. Residente de Obra', role: 'Site Resident', phone: '+51966000002', device: 'dvc_pilot_res_02' },
+    { id: 'tech_soils', name: 'Ing. Especialista en Suelos', role: 'Soils Specialist', phone: '+51966000003', device: 'dvc_pilot_soils_03' },
     { id: 'tech_assistant_exec', name: 'Tec. Jorge Huamán (Asistente)', role: 'Assistant', phone: '+51966000004', device: 'dvc_pilot_asst_04' },
     { id: 'tech_safety', name: 'Ing. Patricia Flores (Seguridad)', role: 'Safety Specialist', phone: '+51966000005', device: 'dvc_pilot_safe_05' },
     // Supervision Team

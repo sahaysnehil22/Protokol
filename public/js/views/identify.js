@@ -2,14 +2,14 @@
 import { setConfigItem, getConfigItem } from '../db.js';
 
 export async function renderIdentifyView(container, onAuthenticated) {
-  const currentToken = localStorage.getItem('protokol_device_token') || 'dvc_pilot_david_01';
-  const savedTechId = localStorage.getItem('protokol_tech_id') || 'tech_david_valdez';
+  const currentToken = localStorage.getItem('protokol_device_token') || 'dvc_pilot_qa_01';
+  const savedTechId = localStorage.getItem('protokol_tech_id') || 'tech_quality_spec';
 
   container.innerHTML = `
     <div class="card" style="margin-top: 10px;">
       <div style="text-align: center; margin-bottom: 20px;">
         <div style="font-size: 32px; margin-bottom: 8px;">👷‍♂️</div>
-        <h2 style="font-size: 20px; font-weight: 800; color: #F8FAFC;">Identificación de Campo</h2>
+        <h2 style="font-size: 20px; font-weight: 800; color: #0F172A;">Identificación de Campo</h2>
         <p style="font-size: 13px; color: var(--color-text-secondary);">
           Tramo AY-728 a AY-729 (Ayacucho) — Contrato N° 81-2026
         </p>
@@ -17,12 +17,12 @@ export async function renderIdentifyView(container, onAuthenticated) {
 
       <form id="identify-form">
         <div class="form-group">
-          <label class="form-label">Técnico / Especialista Responsable</label>
+          <label class="form-label">Ingeniero / Especialista Responsable</label>
           <select id="tech-select" class="form-input" style="font-size: 15px;">
             <optgroup label="Equipo de Ejecución">
-              <option value="tech_david_valdez" data-role="Quality Specialist">Ing. David Valdez Ochoa (Especialista de Calidad)</option>
-              <option value="tech_resident" data-role="Site Resident">Ing. Carlos Mendoza (Residente de Obra)</option>
-              <option value="tech_soils" data-role="Soils Specialist">Ing. Marco Quispe (Especialista en Suelos)</option>
+              <option value="tech_quality_spec" data-role="Quality Specialist">Ing. Especialista de Calidad</option>
+              <option value="tech_resident" data-role="Site Resident">Ing. Residente de Obra</option>
+              <option value="tech_soils" data-role="Soils Specialist">Ing. Especialista en Suelos</option>
               <option value="tech_assistant_exec" data-role="Assistant">Tec. Jorge Huamán (Asistente de Calidad)</option>
               <option value="tech_safety" data-role="Safety Specialist">Ing. Patricia Flores (Especialista de Seguridad)</option>
             </optgroup>
@@ -63,7 +63,7 @@ export async function renderIdentifyView(container, onAuthenticated) {
             class="form-input" 
             value="${currentToken}" 
             readonly 
-            style="font-size: 12px; color: var(--color-text-muted); background: #0B1120;"
+            style="font-size: 12px; color: var(--color-text-muted); background: #F1F5F9; border-color: #E2E8F0;"
           />
         </div>
 

@@ -1,4 +1,4 @@
-/* PROTOKOL — UI Components */
+/* PROTOKOL — UI Components (Light Theme) */
 
 /* Buttons */
 .btn {
@@ -9,17 +9,18 @@
   min-height: var(--touch-target-min);
   padding: 12px 20px;
   border-radius: var(--border-radius);
-  font-size: 16px;
+  font-size: 15px;
   font-weight: 700;
-  border: none;
+  border: 1px solid transparent;
   cursor: pointer;
-  transition: var(--transition);
+  transition: all 0.15s ease-in-out;
   text-decoration: none;
   width: 100%;
+  box-shadow: var(--shadow-sm);
 }
 
 .btn:active {
-  transform: scale(0.98);
+  transform: scale(0.99);
 }
 
 .btn-primary {
@@ -33,28 +34,32 @@
 
 .btn-success {
   background-color: var(--color-pass);
-  color: #064E3B;
-  font-weight: 800;
+  color: #FFFFFF;
+}
+
+.btn-success:hover {
+  background-color: #047857;
 }
 
 .btn-secondary {
-  background-color: #334155;
-  color: #F8FAFC;
+  background-color: #E2E8F0;
+  color: #1E293B;
+  border-color: #CBD5E1;
 }
 
 .btn-secondary:hover {
-  background-color: #475569;
+  background-color: #CBD5E1;
 }
 
 .btn-outline {
-  background: transparent;
-  border: 2px solid var(--color-border);
-  color: var(--color-text-primary);
+  background: #FFFFFF;
+  border: 1.5px solid #CBD5E1;
+  color: #334155;
 }
 
 .btn-outline:hover {
-  border-color: #64748B;
-  background-color: #1E293B;
+  border-color: #94A3B8;
+  background-color: #F8FAFC;
 }
 
 /* Cards */
@@ -62,27 +67,17 @@
   background-color: var(--color-surface);
   border: 1px solid var(--color-border);
   border-radius: var(--border-radius);
-  padding: 18px;
+  padding: 20px;
   margin-bottom: 16px;
-}
-
-.card-clickable {
-  cursor: pointer;
-  transition: var(--transition);
-}
-
-.card-clickable:hover {
-  border-color: var(--color-primary);
-  background-color: var(--color-surface-hover);
-  transform: translateY(-2px);
+  box-shadow: var(--shadow-sm);
 }
 
 /* Activity Selection Grid */
 .activity-grid {
   display: grid;
   grid-template-columns: 1fr;
-  gap: 14px;
-  margin-top: 16px;
+  gap: 12px;
+  margin-top: 14px;
 }
 
 @media (min-width: 480px) {
@@ -94,73 +89,76 @@
 .activity-card {
   display: flex;
   flex-direction: column;
-  padding: 20px;
+  padding: 18px;
   border-radius: var(--border-radius);
-  background-color: var(--color-surface);
-  border: 2px solid var(--color-border);
+  background-color: #FFFFFF;
+  border: 1.5px solid var(--color-border);
   cursor: pointer;
-  transition: var(--transition);
+  transition: all 0.15s ease-in-out;
   text-align: left;
+  box-shadow: var(--shadow-sm);
 }
 
 .activity-card:hover, .activity-card:focus {
-  border-color: #38BDF8;
-  background-color: #1E293B;
+  border-color: var(--color-primary);
+  background-color: #F8FAFC;
+  box-shadow: var(--shadow-md);
 }
 
 .activity-icon {
-  font-size: 28px;
-  margin-bottom: 12px;
+  font-size: 26px;
+  margin-bottom: 10px;
 }
 
 .activity-title {
-  font-size: 18px;
+  font-size: 17px;
   font-weight: 800;
-  color: #F8FAFC;
+  color: #0F172A;
   margin-bottom: 4px;
 }
 
 .activity-desc {
   font-size: 13px;
   color: var(--color-text-secondary);
+  line-height: 1.4;
 }
 
-/* Verdict Badges */
+/* Status Badges */
 .badge {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 6px 14px;
+  padding: 5px 12px;
   border-radius: 20px;
   font-size: 12px;
-  font-weight: 800;
+  font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.5px;
 }
 
 .badge-pass {
   background-color: var(--color-pass-bg);
-  color: #34D399;
-  border: 1px solid #059669;
+  color: var(--color-pass-text);
+  border: 1px solid var(--color-pass-border);
 }
 
 .badge-provisional {
   background-color: var(--color-provisional-bg);
-  color: #FBBF24;
-  border: 1px solid #D97706;
+  color: var(--color-provisional-text);
+  border: 1px solid var(--color-provisional-border);
 }
 
 .badge-fail {
   background-color: var(--color-fail-bg);
-  color: #F87171;
-  border: 1px solid #DC2626;
+  color: var(--color-fail-text);
+  border: 1px solid var(--color-fail-border);
 }
 
 /* Modal / Drawer */
 .drawer-backdrop {
   position: fixed;
   inset: 0;
-  background-color: rgba(0, 0, 0, 0.7);
+  background-color: rgba(15, 23, 42, 0.6);
   z-index: 200;
   display: none;
   opacity: 0;
@@ -177,16 +175,17 @@
   bottom: 0;
   left: 0;
   right: 0;
-  background-color: var(--color-surface);
+  background-color: #FFFFFF;
   border-top: 2px solid var(--color-border);
-  border-top-left-radius: 20px;
-  border-top-right-radius: 20px;
+  border-top-left-radius: 18px;
+  border-top-right-radius: 18px;
   padding: 24px;
   max-height: 85vh;
   overflow-y: auto;
   z-index: 201;
   transform: translateY(100%);
-  transition: transform 0.25s ease-out;
+  transition: transform 0.22s ease-out;
+  box-shadow: 0 -10px 25px -5px rgba(0, 0, 0, 0.1);
 }
 
 .drawer-backdrop.open .drawer-panel {
@@ -204,7 +203,7 @@
   background: none;
   border: none;
   color: var(--color-text-secondary);
-  font-size: 24px;
+  font-size: 22px;
   cursor: pointer;
   padding: 4px 8px;
 }

@@ -107,7 +107,7 @@ describe('PROTOKOL Phase 0 MVP — Comprehensive Acceptance Test Suite', () => {
       .post('/api/protocols')
       .send({
         project_id: 'AY-728-001',
-        device_token: 'dvc_pilot_david_01',
+        device_token: 'dvc_pilot_qa_01',
         technician_pin: '1234',
         activity: 'CONCRETE',
         recorded_at: '2026-09-14T08:00:00-05:00',
@@ -144,7 +144,7 @@ describe('PROTOKOL Phase 0 MVP — Comprehensive Acceptance Test Suite', () => {
       .post('/api/protocols')
       .send({
         project_id: 'AY-728-001',
-        device_token: 'dvc_pilot_david_01',
+        device_token: 'dvc_pilot_qa_01',
         technician_pin: '1234',
         activity: 'CONCRETE',
         recorded_at: '2026-09-14T08:00:00-05:00',
@@ -190,7 +190,7 @@ describe('PROTOKOL Phase 0 MVP — Comprehensive Acceptance Test Suite', () => {
       .post('/api/protocols')
       .send({
         project_id: 'AY-728-001',
-        device_token: 'dvc_pilot_david_01',
+        device_token: 'dvc_pilot_qa_01',
         technician_pin: '1234',
         activity: 'CONCRETE',
         recorded_at: '2026-09-14T08:00:00-05:00',

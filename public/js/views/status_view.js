@@ -13,8 +13,8 @@ export async function renderStatusView(container, onBackToField) {
     </div>
 
     <div style="margin-bottom: 20px;">
-      <span style="font-size: 11px; font-weight: 800; color: #38BDF8; letter-spacing: 0.5px; text-transform: uppercase;">
-        Panel del Especialista de Calidad (David Valdez Ochoa)
+      <span style="font-size: 11px; font-weight: 800; color: #0284C7; letter-spacing: 0.5px; text-transform: uppercase;">
+        Panel del Especialista de Calidad
       </span>
       <h1 style="font-size: 22px; font-weight: 900; color: #F8FAFC; margin-top: 2px;">
         Estado de Calidad y Trazabilidad
@@ -45,13 +45,13 @@ export async function renderStatusView(container, onBackToField) {
     </div>
 
     <!-- Master Quality Dossier Action -->
-    <div class="card" style="background: linear-gradient(135deg, #1E293B 0%, #0F172A 100%); border-color: #0284C7; margin-bottom: 20px;">
-      <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: gap: 10px;">
+    <div class="card" style="background: linear-gradient(135deg, #F0F9FF 0%, #E0F2FE 100%); border: 1px solid #BAE6FD; margin-bottom: 20px;">
+      <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
         <div>
-          <div style="font-size: 14px; font-weight: 800; color: #F8FAFC;">
+          <div style="font-size: 14px; font-weight: 800; color: #0369A1;">
             Dosier de Calidad Oficial
           </div>
-          <div style="font-size: 12px; color: var(--color-text-secondary); margin-top: 2px;">
+          <div style="font-size: 12px; color: #0284C7; margin-top: 2px;">
             Compila todos los protocolos, actas y ensayos en un PDF único para valorización.
           </div>
         </div>
@@ -64,7 +64,7 @@ export async function renderStatusView(container, onBackToField) {
     <!-- Protocols Real-time Log Table -->
     <div class="card" style="padding: 14px;">
       <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
-        <h3 style="font-size: 15px; font-weight: 800; color: #F8FAFC;">
+        <h3 style="font-size: 15px; font-weight: 800; color: #0F172A;">
           Historial de Protocolos Emitidos
         </h3>
         <span id="protocols-count-badge" style="font-size: 11px; color: var(--color-text-muted);">
@@ -137,13 +137,13 @@ export async function renderStatusView(container, onBackToField) {
       tableEl.innerHTML = data.protocols.map(p => {
         const badgeClass = p.verdict === 'PASS' ? 'badge-pass' : p.verdict === 'PROVISIONAL_PASS' ? 'badge-provisional' : 'badge-fail';
         return `
-          <div style="background: #0F172A; border: 1px solid var(--color-border); border-radius: 8px; padding: 12px;">
+          <div style="background: #F8FAFC; border: 1px solid var(--color-border); border-radius: 8px; padding: 12px;">
             <div style="display: flex; justify-content: space-between; align-items: flex-start;">
               <div>
                 <span class="badge ${badgeClass}" style="font-size: 10px; padding: 3px 8px;">
                   ${p.verdict}
                 </span>
-                <span style="font-size: 11px; font-weight: 700; color: #38BDF8; margin-left: 6px;">
+                <span style="font-size: 11px; font-weight: 700; color: #0284C7; margin-left: 6px;">
                   ${p.activity}
                 </span>
               </div>
@@ -152,7 +152,7 @@ export async function renderStatusView(container, onBackToField) {
               </span>
             </div>
 
-            <div style="font-size: 13px; font-weight: 700; color: #F8FAFC; margin-top: 6px;">
+            <div style="font-size: 13px; font-weight: 700; color: #0F172A; margin-top: 6px;">
               ${p.id}
             </div>
             <div style="font-size: 12px; color: var(--color-text-secondary); margin-top: 2px;">
@@ -208,14 +208,14 @@ export async function renderStatusView(container, onBackToField) {
   function openLabResultModal(protocolId) {
     modalPanel.innerHTML = `
       <div class="drawer-header">
-        <h3 style="font-size: 17px; font-weight: 800; color: #F8FAFC;">
+        <h3 style="font-size: 17px; font-weight: 800; color: #0F172A;">
           Registrar Rotura de Probeta de Concreto
         </h3>
         <button class="drawer-close" id="btn-close-modal">✕</button>
       </div>
 
       <div style="font-size: 13px; color: var(--color-text-secondary); margin-bottom: 16px;">
-        Protocolo: <strong style="color: #38BDF8;">${protocolId}</strong>
+        Protocolo: <strong style="color: #0284C7;">${protocolId}</strong>
       </div>
 
       <form id="form-cylinder-result">
@@ -289,14 +289,14 @@ export async function renderStatusView(container, onBackToField) {
   function openNcClosureModal(protocolId) {
     modalPanel.innerHTML = `
       <div class="drawer-header">
-        <h3 style="font-size: 17px; font-weight: 800; color: #F8FAFC;">
+        <h3 style="font-size: 17px; font-weight: 800; color: #0F172A;">
           Cerrar No Conformidad
         </h3>
         <button class="drawer-close" id="btn-close-modal">✕</button>
       </div>
 
       <div style="font-size: 13px; color: var(--color-text-secondary); margin-bottom: 16px;">
-        Protocolo: <strong style="color: #38BDF8;">${protocolId}</strong>
+        Protocolo: <strong style="color: #0284C7;">${protocolId}</strong>
       </div>
 
       <form id="form-close-nc">
@@ -328,7 +328,7 @@ export async function renderStatusView(container, onBackToField) {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             corrective_action: action,
-            technician_id: 'tech_david_valdez'
+            technician_id: 'tech_quality_spec'
           })
         }).catch(() => {});
 

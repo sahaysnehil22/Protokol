@@ -176,7 +176,7 @@ export class PdfService {
 
       doc.fillColor('#334155').fontSize(8).font('Helvetica-Bold');
       doc.text('ESPECIALISTA DE CALIDAD', 60, y + 6, { width: 160, align: 'center' });
-      doc.font('Helvetica').fontSize(7).text('Ing. David Valdez Ochoa', 60, y + 17, { width: 160, align: 'center' });
+      doc.font('Helvetica').fontSize(7).text('Ing. Especialista de Calidad (CIP)', 60, y + 17, { width: 160, align: 'center' });
 
       doc.font('Helvetica-Bold').fontSize(8).text('SUPERVISIÓN DE OBRA', 330, y + 6, { width: 160, align: 'center' });
       doc.font('Helvetica').fontSize(7).text('Consorcio Supervisor Ayacucho', 330, y + 17, { width: 160, align: 'center' });
@@ -234,7 +234,7 @@ export class PdfService {
       doc.moveDown(4);
 
       doc.fontSize(10).font('Helvetica-Bold').text('RESPONSABLE DE CALIDAD:', { align: 'center' });
-      doc.font('Helvetica').text('Ing. David Valdez Ochoa — Especialista de Calidad', { align: 'center' });
+      doc.font('Helvetica').text('Área de Aseguramiento y Control de Calidad', { align: 'center' });
       doc.moveDown(6);
 
       doc.fontSize(9).font('Helvetica').text(`Compilado: ${new Date().toLocaleDateString('es-PE')} | Total Protocolos: ${protocols.length} | No Conformidades Abiertas: ${openNcs.count}`, { align: 'center' });

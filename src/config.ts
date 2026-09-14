@@ -26,7 +26,7 @@ export const config = {
   
   // WhatsApp Notification Settings
   whatsappChannel: process.env.WHATSAPP_CHANNEL || 'WHATSAPP_DEV',
-  whatsappRecipient: process.env.WHATSAPP_RECIPIENT || '+51966000000', // David Valdez Ochoa (Quality Specialist)
+  whatsappRecipient: process.env.WHATSAPP_RECIPIENT || '+51966000000', // Especialista de Calidad
   twilioAccountSid: process.env.TWILIO_ACCOUNT_SID || '',
   twilioAuthToken: process.env.TWILIO_AUTH_TOKEN || '',
   twilioFromNumber: process.env.TWILIO_FROM_NUMBER || '',

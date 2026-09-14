@@ -5,10 +5,10 @@ export function renderHomeView(container, session, onSelectActivity, onOpenStatu
     <div style="margin-bottom: 20px;">
       <div style="display: flex; justify-content: space-between; align-items: flex-start;">
         <div>
-          <span style="font-size: 11px; font-weight: 800; color: #38BDF8; letter-spacing: 0.5px; text-transform: uppercase;">
+          <span style="font-size: 11px; font-weight: 800; color: #0284C7; letter-spacing: 0.5px; text-transform: uppercase;">
             Proyecto AY-728-001 (Ayacucho)
           </span>
-          <h1 style="font-size: 22px; font-weight: 900; color: #F8FAFC; margin-top: 2px;">
+          <h1 style="font-size: 22px; font-weight: 900; color: #0F172A; margin-top: 2px;">
             Registro de Calidad en Campo
           </h1>
           <p style="font-size: 13px; color: var(--color-text-secondary); margin-top: 2px;">
@@ -66,7 +66,7 @@ export function renderHomeView(container, session, onSelectActivity, onOpenStatu
     <!-- Quality Specialist Quick Status View Access -->
     <div style="margin-top: 28px;">
       <button class="btn btn-outline" id="btn-status-view" style="font-size: 14px;">
-        📊 Vista de Estado del Especialista de Calidad (David) →
+        📊 Vista de Estado del Especialista de Calidad →
       </button>
     </div>
   `;

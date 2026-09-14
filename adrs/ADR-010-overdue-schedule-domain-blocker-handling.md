@@ -12,7 +12,7 @@ Requirement R10 specifies that if an expected protocol has not been submitted 4 
 
 ## Consequences
 - Satisfies Requirement R10 deterministically without hardcoding fake scheduling assumptions.
-- Ready to ingest the real schedule once David and the Site Resident establish the single source of truth.
+- Ready to ingest the real schedule once the Quality Specialist and the Site Resident establish the single source of truth.
 
 ## Reversibility
 **Reversible in days**.

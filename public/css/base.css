@@ -1,35 +1,44 @@
-/* PROTOKOL — Base Design System & CSS Variables */
+/* PROTOKOL — Professional Light Theme for Civil Infrastructure */
 :root {
-  --color-bg: #0F172A;          /* Deep slate for high contrast */
-  --color-surface: #1E293B;     /* Card background */
-  --color-surface-hover: #334155;
-  --color-surface-card: #1E293B;
-  --color-border: #334155;
-  --color-text-primary: #F8FAFC;
-  --color-text-secondary: #94A3B8;
+  --color-bg: #F8FAFC;          /* Clean light gray background */
+  --color-surface: #FFFFFF;     /* Pure white cards */
+  --color-surface-subtle: #F1F5F9;
+  --color-surface-hover: #F8FAFC;
+  --color-border: #E2E8F0;      /* Crisp slate border */
+  --color-border-strong: #CBD5E1;
+  
+  --color-text-primary: #0F172A;   /* Sharp dark slate for sunlight legibility */
+  --color-text-secondary: #475569; /* Balanced secondary text */
   --color-text-muted: #64748B;
   
-  --color-primary: #0284C7;     /* Sky blue */
+  --color-primary: #0284C7;        /* Engineering blue */
   --color-primary-hover: #0369A1;
+  --color-primary-subtle: #E0F2FE;
   
-  --color-pass: #10B981;        /* Emerald green */
-  --color-pass-bg: #064E3B;
+  --color-pass: #059669;           /* Clean emerald green */
+  --color-pass-bg: #ECFDF5;
+  --color-pass-border: #A7F3D0;
+  --color-pass-text: #065F46;
   
-  --color-provisional: #F59E0B; /* Amber */
-  --color-provisional-bg: #78350F;
+  --color-provisional: #D97706;    /* Amber */
+  --color-provisional-bg: #FFFBEB;
+  --color-provisional-border: #FDE68A;
+  --color-provisional-text: #92400E;
   
-  --color-fail: #EF4444;        /* Crimson red */
-  --color-fail-bg: #7F1D1D;
+  --color-fail: #DC2626;           /* Crimson */
+  --color-fail-bg: #FEF2F2;
+  --color-fail-border: #FECACA;
+  --color-fail-text: #991B1B;
 
-  --color-warning: #F59E0B;
-  --color-offline: #DC2626;
   --color-online: #10B981;
+  --color-offline: #EF4444;
 
   --font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   --touch-target-min: 52px;
-  --border-radius: 12px;
-  --border-radius-sm: 8px;
-  --transition: all 0.2s ease-in-out;
+  --border-radius: 10px;
+  --border-radius-sm: 6px;
+  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.07), 0 2px 4px -2px rgba(0, 0, 0, 0.05);
 }
 
 * {
@@ -51,14 +60,14 @@ body {
   overflow-x: hidden;
 }
 
-/* App Header & Navigation Bar */
+/* App Header */
 header.app-header {
   position: sticky;
   top: 0;
   z-index: 100;
-  background-color: rgba(15, 23, 42, 0.95);
-  backdrop-filter: blur(8px);
+  background-color: #FFFFFF;
   border-bottom: 1px solid var(--color-border);
+  box-shadow: var(--shadow-sm);
   padding: 12px 16px;
   display: flex;
   align-items: center;
@@ -68,27 +77,31 @@ header.app-header {
 .brand {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
   text-decoration: none;
   color: inherit;
 }
 
+.brand-icon {
+  font-size: 22px;
+}
+
 .brand-logo {
-  font-size: 20px;
-  font-weight: 900;
+  font-size: 19px;
+  font-weight: 800;
   letter-spacing: -0.5px;
-  color: #38BDF8;
+  color: #0F172A;
 }
 
 .brand-subtitle {
   font-size: 11px;
-  color: var(--color-text-secondary);
-  font-weight: 500;
+  color: var(--color-text-muted);
+  font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.5px;
 }
 
-/* Network & Sync Status Indicator */
+/* Network Status Indicator */
 .status-pill {
   display: flex;
   align-items: center;
@@ -97,9 +110,11 @@ header.app-header {
   border-radius: 20px;
   font-size: 12px;
   font-weight: 700;
-  background-color: #1E293B;
+  background-color: var(--color-surface-subtle);
   border: 1px solid var(--color-border);
+  color: var(--color-text-secondary);
   cursor: pointer;
+  user-select: none;
 }
 
 .status-dot {
@@ -109,30 +124,34 @@ header.app-header {
   background-color: var(--color-online);
 }
 
+.status-pill.offline {
+  background-color: #FEF2F2;
+  border-color: #FECACA;
+  color: #991B1B;
+}
+
 .status-pill.offline .status-dot {
   background-color: var(--color-offline);
 }
 
-.status-pill.syncing .status-dot {
-  background-color: var(--color-warning);
-  animation: pulse 1s infinite;
+.status-pill.syncing {
+  background-color: #FFFBEB;
+  border-color: #FDE68A;
+  color: #92400E;
 }
 
-@keyframes pulse {
-  0% { opacity: 1; transform: scale(1); }
-  50% { opacity: 0.4; transform: scale(1.2); }
-  100% { opacity: 1; transform: scale(1); }
+.status-pill.syncing .status-dot {
+  background-color: #F59E0B;
 }
 
 main#app-content {
   flex: 1;
   padding: 16px;
-  max-width: 600px;
+  max-width: 620px;
   margin: 0 auto;
   width: 100%;
 }
 
-/* Tablet & Desktop max width */
 @media (min-width: 768px) {
   main#app-content {
     max-width: 780px;

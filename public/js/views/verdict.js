@@ -23,7 +23,7 @@ export function renderVerdictView(container, result, onNewProtocol, onOpenStatus
         </span>
       </div>
 
-      <h2 style="font-size: 20px; font-weight: 800; color: #F8FAFC; margin-bottom: 6px;">
+      <h2 style="font-size: 20px; font-weight: 800; color: #0F172A; margin-bottom: 6px;">
         ${result.protocol_id}
       </h2>
       <p style="font-size: 13px; color: var(--color-text-secondary); max-width: 440px; margin: 0 auto 16px auto;">
@@ -31,7 +31,7 @@ export function renderVerdictView(container, result, onNewProtocol, onOpenStatus
       </p>
 
       ${result.isOffline ? `
-        <div style="background: rgba(245, 158, 11, 0.1); border: 1px solid #D97706; border-radius: 8px; padding: 10px 14px; margin-bottom: 16px; font-size: 12px; color: #FBBF24;">
+        <div style="background: rgba(245, 158, 11, 0.1); border: 1px solid #D97706; border-radius: 8px; padding: 10px 14px; margin-bottom: 16px; font-size: 12px; color: #B45309;">
           📡 <strong>Modo Offline:</strong> Protocolo guardado en el teléfono. Se sincronizará automáticamente y generará el PDF al recuperar señal.
         </div>
       ` : ''}
@@ -50,13 +50,13 @@ export function renderVerdictView(container, result, onNewProtocol, onOpenStatus
           Verificación de Criterios Técnicos
         </div>
 
-        <div style="background: #0B1120; border: 1px solid var(--color-border); border-radius: 8px; overflow: hidden;">
+        <div style="background: #F8FAFC; border: 1px solid var(--color-border); border-radius: 8px; overflow: hidden;">
           ${result.checks.map(chk => `
-            <div style="display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; border-bottom: 1px solid #1E293B;">
+            <div style="display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; border-bottom: 1px solid #E2E8F0;">
               <div>
-                <div style="font-size: 13px; font-weight: 700; color: #F8FAFC;">${chk.field}</div>
+                <div style="font-size: 13px; font-weight: 700; color: #0F172A;">${chk.field}</div>
                 <div style="font-size: 11px; color: var(--color-text-muted);">
-                  Obtenido: <strong style="color: #E2E8F0;">${String(chk.actual)}</strong> (Exigido: ${chk.expected})
+                  Obtenido: <strong style="color: #0F172A;">${String(chk.actual)}</strong> (Exigido: ${chk.expected})
                 </div>
               </div>
               <div>
@@ -71,11 +71,11 @@ export function renderVerdictView(container, result, onNewProtocol, onOpenStatus
 
       <!-- Pending Tasks Notice -->
       ${result.pending && result.pending.length > 0 ? `
-        <div style="text-align: left; background: #0B1120; border: 1px solid var(--color-border); border-radius: 8px; padding: 12px 14px; margin-top: 14px;">
-          <div style="font-size: 12px; font-weight: 700; color: #F59E0B; margin-bottom: 4px;">
+        <div style="text-align: left; background: #FFFBEB; border: 1px solid #FCD34D; border-radius: 8px; padding: 12px 14px; margin-top: 14px;">
+          <div style="font-size: 12px; font-weight: 700; color: #B45309; margin-bottom: 4px;">
             ⏳ Tareas Pendientes Programadas:
           </div>
-          <ul style="font-size: 12px; color: var(--color-text-secondary); padding-left: 18px; line-height: 1.6;">
+          <ul style="font-size: 12px; color: #78350F; padding-left: 18px; line-height: 1.6;">
             <li>Rotura de probeta a 7 días (Alerta temprana de resistencia).</li>
             <li>Rotura de probeta a 28 días (Liberación contractual de f'c ≥ 210 kg/cm²).</li>
           </ul>

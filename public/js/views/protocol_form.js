@@ -88,7 +88,7 @@ export async function renderProtocolFormView(container, activity, session, onCom
   function getStepContentHtml(step, act, data, sess) {
     if (step === 1) {
       return `
-        <h3 style="font-size: 17px; font-weight: 800; margin-bottom: 16px; color: #F8FAFC;">
+        <h3 style="font-size: 17px; font-weight: 800; margin-bottom: 16px; color: #0F172A;">
           Paso 1: Segmento y Coordenadas
         </h3>
         
@@ -120,10 +120,10 @@ export async function renderProtocolFormView(container, activity, session, onCom
 
         <div class="form-group" style="margin-bottom: 0;">
           <label class="form-label">Georreferenciación GPS Automática</label>
-          <div style="background: #0B1120; border: 1px solid var(--color-border); border-radius: 8px; padding: 12px;">
+          <div style="background: #F8FAFC; border: 1px solid var(--color-border); border-radius: 8px; padding: 12px;">
             <div style="display: flex; align-items: center; gap: 8px;">
               <span style="font-size: 18px;">📍</span>
-              <span id="gps-display" style="font-size: 14px; font-weight: 700; color: #38BDF8;">
+              <span id="gps-display" style="font-size: 14px; font-weight: 700; color: #0284C7;">
                 ${data.gps.lat.toFixed(6)}, ${data.gps.lng.toFixed(6)} (±${data.gps.accuracy}m)
               </span>
             </div>
@@ -139,13 +139,13 @@ export async function renderProtocolFormView(container, activity, session, onCom
       if (act === 'CONCRETE') {
         const isChecked = data.measurements.formwork_approved !== false;
         return `
-          <h3 style="font-size: 17px; font-weight: 800; margin-bottom: 16px; color: #F8FAFC;">
+          <h3 style="font-size: 17px; font-weight: 800; margin-bottom: 16px; color: #0F172A;">
             Paso 2: Vaciado y Checklist Previo de Encofrado
           </h3>
 
           <!-- Formwork Pre-pour Checklist (Formwork is NOT a 5th activity, it is inside Concrete) -->
           <div style="margin-bottom: 18px;">
-            <label class="form-label" style="color: #38BDF8;">
+            <label class="form-label" style="color: #0284C7;">
               1. Checklist Previo al Vaciado (Encofrado)
             </label>
             <div class="checklist-item ${isChecked ? 'checked' : ''}" id="chk-formwork">
@@ -159,7 +159,7 @@ export async function renderProtocolFormView(container, activity, session, onCom
             </div>
           </div>
 
-          <label class="form-label" style="color: #38BDF8; margin-top: 16px;">
+          <label class="form-label" style="color: #0284C7; margin-top: 16px;">
             2. Control de Mezcla en Llegada
           </label>
 
@@ -230,7 +230,7 @@ export async function renderProtocolFormView(container, activity, session, onCom
                 class="form-input" 
                 value="${data.measurements.design_fc || '210'}" 
                 readonly 
-                style="background: #0B1120; color: #94A3B8;"
+                style="background: #F1F5F9; color: #475569; border-color: #E2E8F0;"
               />
               <span class="input-unit">kg/cm²</span>
             </div>
@@ -240,7 +240,7 @@ export async function renderProtocolFormView(container, activity, session, onCom
 
       if (act === 'SURVEY') {
         return `
-          <h3 style="font-size: 17px; font-weight: 800; margin-bottom: 16px; color: #F8FAFC;">
+          <h3 style="font-size: 17px; font-weight: 800; margin-bottom: 16px; color: #0F172A;">
             Paso 2: Topografía y Control Geométrico
           </h3>
 
@@ -266,7 +266,7 @@ export async function renderProtocolFormView(container, activity, session, onCom
 
       if (act === 'COMPACTION') {
         return `
-          <h3 style="font-size: 17px; font-weight: 800; margin-bottom: 16px; color: #F8FAFC;">
+          <h3 style="font-size: 17px; font-weight: 800; margin-bottom: 16px; color: #0F172A;">
             Paso 2: Ensayos de Suelos y Compactación
           </h3>
 
@@ -346,7 +346,7 @@ export async function renderProtocolFormView(container, activity, session, onCom
 
       if (act === 'STEEL') {
         return `
-          <h3 style="font-size: 17px; font-weight: 800; margin-bottom: 16px; color: #F8FAFC;">
+          <h3 style="font-size: 17px; font-weight: 800; margin-bottom: 16px; color: #0F172A;">
             Paso 2: Armadura de Acero de Refuerzo
           </h3>
 
@@ -391,7 +391,7 @@ export async function renderProtocolFormView(container, activity, session, onCom
 
     if (step === 3) {
       return `
-        <h3 style="font-size: 17px; font-weight: 800; margin-bottom: 16px; color: #F8FAFC;">
+        <h3 style="font-size: 17px; font-weight: 800; margin-bottom: 16px; color: #0F172A;">
           Paso 3: Evidencia Fotográfica de Campo
         </h3>
         <p style="font-size: 13px; color: var(--color-text-secondary); margin-bottom: 16px;">
@@ -425,14 +425,14 @@ export async function renderProtocolFormView(container, activity, session, onCom
 
     if (step === 4) {
       return `
-        <h3 style="font-size: 17px; font-weight: 800; margin-bottom: 16px; color: #F8FAFC;">
+        <h3 style="font-size: 17px; font-weight: 800; margin-bottom: 16px; color: #0F172A;">
           Paso 4: Resumen y Firma Digital
         </h3>
 
-        <div style="background: #0B1120; border-radius: 8px; padding: 14px; margin-bottom: 18px; border: 1px solid var(--color-border);">
+        <div style="background: #F8FAFC; border-radius: 8px; padding: 14px; margin-bottom: 18px; border: 1px solid var(--color-border);">
           <div style="font-size: 12px; color: var(--color-text-muted); margin-bottom: 4px;">RESUMEN DE LIBERACIÓN</div>
-          <div style="font-size: 14px; font-weight: 700; color: #F8FAFC;">
-            Actividad: <span style="color: #38BDF8;">${data.activity}</span>
+          <div style="font-size: 14px; font-weight: 700; color: #0F172A;">
+            Actividad: <span style="color: #0284C7;">${data.activity}</span>
           </div>
           <div style="font-size: 13px; color: var(--color-text-secondary); margin-top: 2px;">
             Progresiva ${data.chainage} | Paño ${data.panel}
