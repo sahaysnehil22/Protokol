@@ -1,0 +1,141 @@
+/* PROTOKOL — Base Design System & CSS Variables */
+:root {
+  --color-bg: #0F172A;          /* Deep slate for high contrast */
+  --color-surface: #1E293B;     /* Card background */
+  --color-surface-hover: #334155;
+  --color-surface-card: #1E293B;
+  --color-border: #334155;
+  --color-text-primary: #F8FAFC;
+  --color-text-secondary: #94A3B8;
+  --color-text-muted: #64748B;
+  
+  --color-primary: #0284C7;     /* Sky blue */
+  --color-primary-hover: #0369A1;
+  
+  --color-pass: #10B981;        /* Emerald green */
+  --color-pass-bg: #064E3B;
+  
+  --color-provisional: #F59E0B; /* Amber */
+  --color-provisional-bg: #78350F;
+  
+  --color-fail: #EF4444;        /* Crimson red */
+  --color-fail-bg: #7F1D1D;
+
+  --color-warning: #F59E0B;
+  --color-offline: #DC2626;
+  --color-online: #10B981;
+
+  --font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --touch-target-min: 52px;
+  --border-radius: 12px;
+  --border-radius-sm: 8px;
+  --transition: all 0.2s ease-in-out;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  -webkit-tap-highlight-color: transparent;
+}
+
+body {
+  background-color: var(--color-bg);
+  color: var(--color-text-primary);
+  font-family: var(--font-family);
+  font-size: 16px;
+  line-height: 1.5;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  overflow-x: hidden;
+}
+
+/* App Header & Navigation Bar */
+header.app-header {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  background-color: rgba(15, 23, 42, 0.95);
+  backdrop-filter: blur(8px);
+  border-bottom: 1px solid var(--color-border);
+  padding: 12px 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  text-decoration: none;
+  color: inherit;
+}
+
+.brand-logo {
+  font-size: 20px;
+  font-weight: 900;
+  letter-spacing: -0.5px;
+  color: #38BDF8;
+}
+
+.brand-subtitle {
+  font-size: 11px;
+  color: var(--color-text-secondary);
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+/* Network & Sync Status Indicator */
+.status-pill {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 700;
+  background-color: #1E293B;
+  border: 1px solid var(--color-border);
+  cursor: pointer;
+}
+
+.status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background-color: var(--color-online);
+}
+
+.status-pill.offline .status-dot {
+  background-color: var(--color-offline);
+}
+
+.status-pill.syncing .status-dot {
+  background-color: var(--color-warning);
+  animation: pulse 1s infinite;
+}
+
+@keyframes pulse {
+  0% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.4; transform: scale(1.2); }
+  100% { opacity: 1; transform: scale(1); }
+}
+
+main#app-content {
+  flex: 1;
+  padding: 16px;
+  max-width: 600px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+/* Tablet & Desktop max width */
+@media (min-width: 768px) {
+  main#app-content {
+    max-width: 780px;
+    padding: 24px;
+  }
+}

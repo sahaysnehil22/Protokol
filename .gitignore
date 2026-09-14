@@ -1,0 +1,8 @@
+node_modules/
+dist/
+data/
+*.db
+*.db-wal
+*.db-shm
+.DS_Store
+extracted_doc_v2_2.txt

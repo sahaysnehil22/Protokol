@@ -1,0 +1,22 @@
+{
+  "name": "PROTOKOL — Trazabilidad de Calidad Vial",
+  "short_name": "PROTOKOL",
+  "description": "Sistema de trazabilidad de calidad para infraestructura vial pública (Perú)",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0F172A",
+  "theme_color": "#0284C7",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/icons/icon-192.png",
+      "type": "image/png",
+      "sizes": "192x192"
+    },
+    {
+      "src": "/icons/icon-512.png",
+      "type": "image/png",
+      "sizes": "512x512"
+    }
+  ]
+}
