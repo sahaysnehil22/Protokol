@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "NODE_OPTIONS=\"--experimental-sqlite\" tsx watch src/server.ts",
-    "start": "NODE_OPTIONS=\"--experimental-sqlite\" tsx src/server.ts",
+    "start": "node index.js",
     "build": "tsc",
     "test": "NODE_OPTIONS=\"--experimental-sqlite\" vitest run"
   },
@@ -14,15 +14,12 @@
   "license": "ISC",
   "description": "",
   "dependencies": {
-    "better-sqlite3": "^13.0.3",
     "cors": "^2.8.6",
     "express": "^5.2.1",
     "multer": "^2.3.0",
-    "pdfkit": "^0.20.2",
-    "sqlite3": "^6.0.1"
+    "pdfkit": "^0.20.2"
   },
   "devDependencies": {
-    "@types/better-sqlite3": "^9.6.0",
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.6",
     "@types/multer": "^2.2.0",
