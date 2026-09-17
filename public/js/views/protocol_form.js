@@ -6,10 +6,25 @@ import { t, getLanguage } from '../i18n.js';
 
 export async function renderProtocolFormView(container, activity, session, onCompleted, onCancel) {
   let currentStep = 1;
+  let acknowledgedNC = false;
   const projectId = session.project_id || 'AY-728-001';
 
-  // Load project criteria for client-side hints
-  let criteriaMap = {};
+  // Default criteria fallback
+  const defaultCriteria = {
+    slump_cm: { field: 'slump_cm', operator: 'BETWEEN', min_value: 8.9, max_value: 12.7, unit: 'cm' },
+    cylinders_cast: { field: 'cylinders_cast', operator: 'GTE', min_value: 4, unit: 'probetas' },
+    formwork_approved: { field: 'formwork_approved', operator: 'EQ', expected_value: 'true' },
+    elevation_deviation: { field: 'elevation_deviation', operator: 'LTE', max_value: 1.0, unit: 'cm' },
+    compaction_pct: { field: 'compaction_pct', operator: 'GTE', min_value: 100.0, unit: '%' },
+    moisture_deviation: { field: 'moisture_deviation', operator: 'LTE', max_value: 1.5, unit: '%' },
+    sub_base_thickness: { field: 'sub_base_thickness', operator: 'GTE', min_value: 20.0, unit: 'cm' },
+    base_thickness: { field: 'base_thickness', operator: 'GTE', min_value: 25.0, unit: 'cm' },
+    bar_spacing_cm: { field: 'bar_spacing_cm', operator: 'BETWEEN', min_value: 14.0, max_value: 16.0, unit: 'cm' },
+    concrete_cover_cm: { field: 'concrete_cover_cm', operator: 'GTE', min_value: 5.0, unit: 'cm' }
+  };
+
+  // Load project criteria for client-side hints & live validation
+  let criteriaMap = { ...defaultCriteria };
   try {
     const res = await fetch(`/api/projects/${projectId}/criteria`);
     if (res.ok) {
@@ -54,17 +69,121 @@ export async function renderProtocolFormView(container, activity, session, onCom
     }
   });
 
+  // Evaluate any single criterion rule
+  function evaluateCriterion(crit, val) {
+    if (!crit) return { valid: true };
+    const num = typeof val === 'number' ? val : parseFloat(val);
+    if (isNaN(num)) return { valid: false, error: 'Valor inválido' };
+
+    if (crit.operator === 'BETWEEN') {
+      const valid = num >= crit.min_value && num <= crit.max_value;
+      const range = `${crit.min_value} - ${crit.max_value}`;
+      return {
+        valid,
+        range,
+        error: valid ? null : t('validation.slump_out', { range })
+      };
+    }
+    if (crit.operator === 'GTE') {
+      const valid = num >= crit.min_value;
+      return {
+        valid,
+        min: crit.min_value,
+        error: valid ? null : `Menor al mínimo exigido (≥ ${crit.min_value} ${crit.unit || ''})`
+      };
+    }
+    if (crit.operator === 'LTE') {
+      const valid = num <= crit.max_value;
+      return {
+        valid,
+        max: crit.max_value,
+        error: valid ? null : `Supera la tolerancia máxima (≤ ${crit.max_value} ${crit.unit || ''})`
+      };
+    }
+    if (crit.operator === 'EQ') {
+      const valid = String(val).toLowerCase() === String(crit.expected_value).toLowerCase();
+      return { valid, error: valid ? null : 'Requisito previo no verificado' };
+    }
+    return { valid: true };
+  }
+
+  // Scan current measurements for non-conformances
+  function checkNonConformances() {
+    const issues = [];
+    if (activity === 'CONCRETE') {
+      if (formData.measurements.formwork_approved === false) {
+        issues.push('Checklist Previo de Encofrado: No aprobado');
+      }
+      const slumpCrit = criteriaMap['slump_cm'] || { min_value: 8.9, max_value: 12.7 };
+      const cylCrit = criteriaMap['cylinders_cast'] || { min_value: 4 };
+      trucksState.forEach(t => {
+        const s = parseFloat(t.slump_cm);
+        if (!isNaN(s) && (s < slumpCrit.min_value || s > slumpCrit.max_value)) {
+          issues.push(`Camión Mixer #${t.truck_number} (${t.mixer_id}): Asentamiento (slump) de ${s} cm fuera de tolerancia (${slumpCrit.min_value} - ${slumpCrit.max_value} cm)`);
+        }
+        const c = parseInt(t.cylinders_cast, 10);
+        if (!isNaN(c) && c < (cylCrit.min_value || 4)) {
+          issues.push(`Camión Mixer #${t.truck_number}: Solo ${c} probetas moldeadas (mínimo ${cylCrit.min_value || 4})`);
+        }
+      });
+    } else if (activity === 'SURVEY') {
+      const dev = Math.abs(parseFloat(formData.measurements.elevation_deviation));
+      const maxDev = criteriaMap['elevation_deviation']?.max_value || 1.0;
+      if (!isNaN(dev) && dev > maxDev) {
+        issues.push(`Desviación de cota: ${formData.measurements.elevation_deviation} cm (tolerancia: ≤ ${maxDev} cm)`);
+      }
+    } else if (activity === 'COMPACTION') {
+      const pct = parseFloat(formData.measurements.compaction_pct);
+      const minPct = criteriaMap['compaction_pct']?.min_value || 100.0;
+      if (!isNaN(pct) && pct < minPct) {
+        issues.push(`Grado de compactación: ${pct}% (mínimo exigido: ≥ ${minPct}%)`);
+      }
+      const moist = Math.abs(parseFloat(formData.measurements.moisture_deviation));
+      const maxMoist = criteriaMap['moisture_deviation']?.max_value || 1.5;
+      if (!isNaN(moist) && moist > maxMoist) {
+        issues.push(`Desviación de humedad: ${formData.measurements.moisture_deviation}% (tolerancia: ±${maxMoist}%)`);
+      }
+      const sub = parseFloat(formData.measurements.sub_base_thickness);
+      const minSub = criteriaMap['sub_base_thickness']?.min_value || 20.0;
+      if (!isNaN(sub) && sub < minSub) {
+        issues.push(`Espesor sub-base: ${sub} cm (mínimo: ≥ ${minSub} cm)`);
+      }
+      const base = parseFloat(formData.measurements.base_thickness);
+      const minBase = criteriaMap['base_thickness']?.min_value || 25.0;
+      if (!isNaN(base) && base < minBase) {
+        issues.push(`Espesor base: ${base} cm (mínimo: ≥ ${minBase} cm)`);
+      }
+    } else if (activity === 'STEEL') {
+      const sp = parseFloat(formData.measurements.bar_spacing_cm);
+      const spCrit = criteriaMap['bar_spacing_cm'] || { min_value: 14.0, max_value: 16.0 };
+      if (!isNaN(sp) && (sp < spCrit.min_value || sp > spCrit.max_value)) {
+        issues.push(`Espaciamiento de acero: ${sp} cm (tolerancia: ${spCrit.min_value} - ${spCrit.max_value} cm)`);
+      }
+      const cov = parseFloat(formData.measurements.concrete_cover_cm);
+      const minCov = criteriaMap['concrete_cover_cm']?.min_value || 5.0;
+      if (!isNaN(cov) && cov < minCov) {
+        issues.push(`Recubrimiento de concreto: ${cov} cm (mínimo: ≥ ${minCov} cm)`);
+      }
+    }
+    return issues;
+  }
+
   function renderStep() {
     container.innerHTML = `
       <!-- Top Navigation -->
       <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px;">
         <button id="btn-back" class="btn btn-outline" style="width: auto; min-height: 40px; padding: 6px 14px; font-size: 13px;">
-          ${t('form.back')}
+          ${currentStep > 1 ? t('form.prev_step') : t('form.back_to_activities')}
         </button>
-        <div style="text-align: right;">
+        <div style="display: flex; align-items: center; gap: 8px;">
           <span class="badge ${activity === 'CONCRETE' ? 'badge-provisional' : 'badge-pass'}">
             ${activity}
           </span>
+          ${currentStep > 1 ? `
+            <button id="btn-exit-flow" class="btn btn-outline" style="width: auto; min-height: 32px; height: 32px; padding: 2px 10px; font-size: 11px; color: #64748B;">
+              ${t('form.exit')}
+            </button>
+          ` : ''}
         </div>
       </div>
 
@@ -167,6 +286,8 @@ export async function renderProtocolFormView(container, activity, session, onCom
     }
 
     if (step === 2) {
+      const advisoryContainerHtml = `<div id="step2-quality-advisory" style="display: none;"></div>`;
+
       if (activity === 'CONCRETE') {
         const isChecked = formData.measurements.formwork_approved !== false;
         const slumpRangeText = criteriaMap['slump_cm'] 
@@ -174,6 +295,8 @@ export async function renderProtocolFormView(container, activity, session, onCom
           : '8.9 - 12.7';
 
         return `
+          ${advisoryContainerHtml}
+
           <h3 style="font-size: 17px; font-weight: 800; margin-bottom: 16px; color: #0F172A;">
             ${t('concrete.step_title')}
           </h3>
@@ -213,6 +336,8 @@ export async function renderProtocolFormView(container, activity, session, onCom
       if (activity === 'SURVEY') {
         const elevVal = formData.measurements.elevation_deviation !== undefined ? formData.measurements.elevation_deviation : '0.5';
         return `
+          ${advisoryContainerHtml}
+
           <h3 style="font-size: 17px; font-weight: 800; margin-bottom: 16px; color: #0F172A;">
             ${t('survey.step_title')}
           </h3>
@@ -230,8 +355,9 @@ export async function renderProtocolFormView(container, activity, session, onCom
               />
               <span class="input-unit">cm</span>
             </div>
+            <div id="survey-feedback-msg"></div>
             <div class="criteria-hint">
-              ℹ️ Tolerancia: <strong>≤ 1.0 cm</strong>
+              ℹ️ Tolerancia del Expediente: <strong>≤ 1.0 cm</strong>
             </div>
           </div>
         `;
@@ -239,6 +365,8 @@ export async function renderProtocolFormView(container, activity, session, onCom
 
       if (activity === 'COMPACTION') {
         return `
+          ${advisoryContainerHtml}
+
           <h3 style="font-size: 17px; font-weight: 800; margin-bottom: 16px; color: #0F172A;">
             ${t('compaction.step_title')}
           </h3>
@@ -256,6 +384,7 @@ export async function renderProtocolFormView(container, activity, session, onCom
               />
               <span class="input-unit">%</span>
             </div>
+            <div id="comp-feedback-msg"></div>
             <div class="criteria-hint">
               ℹ️ Exigido: <strong>≥ 100.0%</strong>
             </div>
@@ -274,6 +403,7 @@ export async function renderProtocolFormView(container, activity, session, onCom
               />
               <span class="input-unit">%</span>
             </div>
+            <div id="moisture-feedback-msg"></div>
             <div class="criteria-hint">
               ℹ️ Tolerancia: <strong>±1.5%</strong>
             </div>
@@ -292,6 +422,7 @@ export async function renderProtocolFormView(container, activity, session, onCom
               />
               <span class="input-unit">cm</span>
             </div>
+            <div id="subbase-feedback-msg"></div>
             <div class="criteria-hint">
               ℹ️ Exigido: <strong>≥ 20 cm</strong>
             </div>
@@ -310,6 +441,7 @@ export async function renderProtocolFormView(container, activity, session, onCom
               />
               <span class="input-unit">cm</span>
             </div>
+            <div id="base-feedback-msg"></div>
             <div class="criteria-hint">
               ℹ️ Exigido: <strong>≥ 25 cm</strong>
             </div>
@@ -319,6 +451,8 @@ export async function renderProtocolFormView(container, activity, session, onCom
 
       if (activity === 'STEEL') {
         return `
+          ${advisoryContainerHtml}
+
           <h3 style="font-size: 17px; font-weight: 800; margin-bottom: 16px; color: #0F172A;">
             ${t('steel.step_title')}
           </h3>
@@ -336,6 +470,7 @@ export async function renderProtocolFormView(container, activity, session, onCom
               />
               <span class="input-unit">cm</span>
             </div>
+            <div id="steel-spacing-feedback-msg"></div>
             <div class="criteria-hint">
               ℹ️ Tolerancia: <strong>14.0 - 16.0 cm</strong>
             </div>
@@ -354,6 +489,7 @@ export async function renderProtocolFormView(container, activity, session, onCom
               />
               <span class="input-unit">cm</span>
             </div>
+            <div id="steel-cover-feedback-msg"></div>
             <div class="criteria-hint">
               ℹ️ Exigido: <strong>≥ 5.0 cm</strong>
             </div>
@@ -390,10 +526,44 @@ export async function renderProtocolFormView(container, activity, session, onCom
     }
 
     if (step === 4) {
+      const nonConformances = checkNonConformances();
+      const hasNC = nonConformances.length > 0;
+
       return `
         <h3 style="font-size: 17px; font-weight: 800; margin-bottom: 16px; color: #0F172A;">
           ${t('step4.title')}
         </h3>
+
+        <!-- Real-Time Evaluation Summary Preview -->
+        ${hasNC ? `
+          <div style="background: #FEF2F2; border: 1.5px solid #FECACA; border-radius: 8px; padding: 14px; margin-bottom: 18px;">
+            <div style="display: flex; align-items: flex-start; gap: 8px;">
+              <span style="font-size: 20px;">⚠️</span>
+              <div>
+                <div style="font-size: 13px; font-weight: 800; color: #991B1B;">
+                  ${t('form.pre_verdict_nc')}
+                </div>
+                <ul style="font-size: 12px; color: #B91C1C; margin-top: 6px; margin-left: 18px; line-height: 1.4;">
+                  ${nonConformances.map(nc => `<li>${nc}</li>`).join('')}
+                </ul>
+              </div>
+            </div>
+          </div>
+        ` : `
+          <div style="background: #ECFDF5; border: 1.5px solid #A7F3D0; border-radius: 8px; padding: 14px; margin-bottom: 18px;">
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <span style="font-size: 20px;">✅</span>
+              <div>
+                <div style="font-size: 13px; font-weight: 800; color: #065F46;">
+                  ${t('form.pre_verdict_pass')}
+                </div>
+                <div style="font-size: 12px; color: #047857; margin-top: 2px;">
+                  ${activity === 'CONCRETE' ? 'Estado proyectado: APROBACIÓN PROVISIONAL (pendiente resultados de probetas a 7/28 días).' : 'Estado proyectado: CONFORME / APROBADO.'}
+                </div>
+              </div>
+            </div>
+          </div>
+        `}
 
         <div style="background: #F8FAFC; border: 1px solid var(--color-border); border-radius: 8px; padding: 14px; margin-bottom: 18px;">
           <div style="font-size: 11px; font-weight: 800; color: #0284C7; text-transform: uppercase;">
@@ -422,6 +592,15 @@ export async function renderProtocolFormView(container, activity, session, onCom
   }
 
   function renderTruckCard(truck, idx, slumpRangeText) {
+    const sCrit = criteriaMap['slump_cm'] || { min_value: 8.9, max_value: 12.7 };
+    const sVal = parseFloat(truck.slump_cm);
+    const isSlumpValid = !isNaN(sVal) && sVal >= sCrit.min_value && sVal <= sCrit.max_value;
+    const isSlumpInvalid = !isNaN(sVal) && (sVal < sCrit.min_value || sVal > sCrit.max_value);
+
+    const cCrit = criteriaMap['cylinders_cast'] || { min_value: 4 };
+    const cVal = parseInt(truck.cylinders_cast, 10);
+    const isCylInvalid = !isNaN(cVal) && cVal < (cCrit.min_value || 4);
+
     return `
       <div class="truck-card" data-index="${idx}" style="border: 1px solid var(--color-border); border-radius: 8px; padding: 14px; margin-bottom: 14px; background: #FAFAFA;">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
@@ -450,8 +629,26 @@ export async function renderProtocolFormView(container, activity, session, onCom
           <div class="form-group">
             <label class="form-label">${t('concrete.slump')}</label>
             <div class="input-wrapper">
-              <input type="number" step="0.1" class="form-input truck-slump" data-index="${idx}" value="${truck.slump_cm}" required />
+              <input 
+                type="number" 
+                step="0.1" 
+                class="form-input truck-slump ${isSlumpInvalid ? 'input-invalid' : isSlumpValid ? 'input-valid' : ''}" 
+                data-index="${idx}" 
+                value="${truck.slump_cm}" 
+                required 
+              />
               <span class="input-unit">cm</span>
+            </div>
+            <div class="slump-feedback-msg" data-index="${idx}">
+              ${isSlumpInvalid ? `
+                <div class="inline-validation-msg msg-error">
+                  ${t('validation.slump_out', { range: slumpRangeText })}
+                </div>
+              ` : isSlumpValid ? `
+                <div class="inline-validation-msg msg-ok">
+                  ${t('validation.slump_ok', { range: slumpRangeText })}
+                </div>
+              ` : ''}
             </div>
             <span class="form-label-hint">${t('concrete.slump_hint', { range: slumpRangeText })}</span>
           </div>
@@ -459,8 +656,26 @@ export async function renderProtocolFormView(container, activity, session, onCom
           <div class="form-group">
             <label class="form-label">${t('concrete.cylinders')}</label>
             <div class="input-wrapper">
-              <input type="number" class="form-input truck-cylinders" data-index="${idx}" value="${truck.cylinders_cast}" min="1" required />
+              <input 
+                type="number" 
+                class="form-input truck-cylinders ${isCylInvalid ? 'input-invalid' : 'input-valid'}" 
+                data-index="${idx}" 
+                value="${truck.cylinders_cast}" 
+                min="1" 
+                required 
+              />
               <span class="input-unit">und</span>
+            </div>
+            <div class="cylinders-feedback-msg" data-index="${idx}">
+              ${isCylInvalid ? `
+                <div class="inline-validation-msg msg-error">
+                  ${t('validation.cylinders_out', { min: cCrit.min_value || 4 })}
+                </div>
+              ` : `
+                <div class="inline-validation-msg msg-ok">
+                  ${t('validation.cylinders_ok', { min: cCrit.min_value || 4 })}
+                </div>
+              `}
             </div>
           </div>
         </div>
@@ -480,17 +695,18 @@ export async function renderProtocolFormView(container, activity, session, onCom
 
   function syncStepData() {
     if (currentStep === 1) {
-      formData.chainage = container.querySelector('#input-chainage').value.trim();
-      formData.panel = container.querySelector('#input-panel').value.trim();
+      const chainEl = container.querySelector('#input-chainage');
+      const panEl = container.querySelector('#input-panel');
+      if (chainEl) formData.chainage = chainEl.value.trim();
+      if (panEl) formData.panel = panEl.value.trim();
     } else if (currentStep === 2) {
       if (activity === 'CONCRETE') {
-        // Read all trucks from DOM
         container.querySelectorAll('.truck-card').forEach((card, idx) => {
-          const mixer = card.querySelector('.truck-mixer').value.trim();
-          const guia = card.querySelector('.truck-guia').value.trim();
-          const slump = card.querySelector('.truck-slump').value.trim();
-          const cyl = card.querySelector('.truck-cylinders').value.trim();
-          const fc = card.querySelector('.truck-fc').value;
+          const mixer = card.querySelector('.truck-mixer')?.value.trim() || '';
+          const guia = card.querySelector('.truck-guia')?.value.trim() || '';
+          const slump = card.querySelector('.truck-slump')?.value.trim() || '';
+          const cyl = card.querySelector('.truck-cylinders')?.value.trim() || '4';
+          const fc = card.querySelector('.truck-fc')?.value || '280';
 
           trucksState[idx] = {
             truck_number: idx + 1,
@@ -498,7 +714,7 @@ export async function renderProtocolFormView(container, activity, session, onCom
             delivery_note: guia,
             slump_cm: slump,
             cylinders_cast: parseInt(cyl, 10) || 4,
-            design_fc: parseFloat(fc) || 210,
+            design_fc: parseFloat(fc) || 280,
             notes: ''
           };
         });
@@ -513,15 +729,22 @@ export async function renderProtocolFormView(container, activity, session, onCom
           notes: t.notes
         }));
       } else if (activity === 'SURVEY') {
-        formData.measurements.elevation_deviation = parseFloat(container.querySelector('#input-survey-elev').value);
+        const el = container.querySelector('#input-survey-elev');
+        if (el) formData.measurements.elevation_deviation = parseFloat(el.value);
       } else if (activity === 'COMPACTION') {
-        formData.measurements.compaction_pct = parseFloat(container.querySelector('#input-comp-pct').value);
-        formData.measurements.moisture_deviation = parseFloat(container.querySelector('#input-moisture').value);
-        formData.measurements.sub_base_thickness = parseFloat(container.querySelector('#input-subbase').value);
-        formData.measurements.base_thickness = parseFloat(container.querySelector('#input-base').value);
+        const cp = container.querySelector('#input-comp-pct');
+        const mo = container.querySelector('#input-moisture');
+        const sb = container.querySelector('#input-subbase');
+        const ba = container.querySelector('#input-base');
+        if (cp) formData.measurements.compaction_pct = parseFloat(cp.value);
+        if (mo) formData.measurements.moisture_deviation = parseFloat(mo.value);
+        if (sb) formData.measurements.sub_base_thickness = parseFloat(sb.value);
+        if (ba) formData.measurements.base_thickness = parseFloat(ba.value);
       } else if (activity === 'STEEL') {
-        formData.measurements.bar_spacing_cm = parseFloat(container.querySelector('#input-steel-spacing').value);
-        formData.measurements.concrete_cover_cm = parseFloat(container.querySelector('#input-steel-cover').value);
+        const sp = container.querySelector('#input-steel-spacing');
+        const co = container.querySelector('#input-steel-cover');
+        if (sp) formData.measurements.bar_spacing_cm = parseFloat(sp.value);
+        if (co) formData.measurements.concrete_cover_cm = parseFloat(co.value);
       }
     } else if (currentStep === 4) {
       const notesEl = container.querySelector('#input-notes');
@@ -529,9 +752,87 @@ export async function renderProtocolFormView(container, activity, session, onCom
     }
   }
 
-  function bindStepEvents() {
-    container.querySelector('#btn-back').addEventListener('click', onCancel);
+  function showQualityAdvisory(issues, onProceed) {
+    const advEl = container.querySelector('#step2-quality-advisory');
+    if (!advEl) {
+      onProceed();
+      return;
+    }
+    advEl.className = 'quality-advisory-banner advisory-nc';
+    advEl.innerHTML = `
+      <div style="display: flex; align-items: flex-start; gap: 8px;">
+        <span style="font-size: 18px;">⚠️</span>
+        <div style="flex: 1;">
+          <div style="font-weight: 800; font-size: 14px; color: #991B1B; margin-bottom: 4px;">
+            ${t('form.quality_advisory_title')}
+          </div>
+          <div style="font-size: 13px; color: #7F1D1D; line-height: 1.4; margin-bottom: 8px;">
+            ${t('form.quality_advisory_nc_text')}
+            <ul style="margin-top: 6px; margin-left: 18px;">
+              ${issues.map(item => `<li><strong>${item}</strong></li>`).join('')}
+            </ul>
+          </div>
+          <div style="display: flex; gap: 8px; margin-top: 10px;">
+            <button type="button" id="btn-advisory-fix" class="btn btn-outline" style="flex: 1; min-height: 38px; height: 38px; font-size: 12px; font-weight: 700; background: #fff; color: #0F172A;">
+              ${t('form.quality_advisory_fix')}
+            </button>
+            <button type="button" id="btn-advisory-continue" class="btn btn-danger" style="flex: 1; min-height: 38px; height: 38px; font-size: 12px; font-weight: 700; background: #DC2626; color: #fff; border-color: #DC2626;">
+              ${t('form.quality_advisory_continue')}
+            </button>
+          </div>
+        </div>
+      </div>
+    `;
+    advEl.style.display = 'block';
+    advEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
 
+    advEl.querySelector('#btn-advisory-fix').addEventListener('click', () => {
+      advEl.style.display = 'none';
+      const firstInvalid = container.querySelector('.input-invalid');
+      if (firstInvalid) {
+        firstInvalid.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        firstInvalid.focus();
+      }
+    });
+
+    advEl.querySelector('#btn-advisory-continue').addEventListener('click', () => {
+      onProceed();
+    });
+  }
+
+  function bindStepEvents() {
+    // Top Navigation: Back / Previous
+    const backBtn = container.querySelector('#btn-back');
+    if (backBtn) {
+      backBtn.addEventListener('click', () => {
+        if (currentStep > 1) {
+          syncStepData();
+          currentStep--;
+          renderStep();
+        } else {
+          // On Step 1, prompt if user typed anything custom
+          if (formData.chainage !== '0+144' || formData.panel !== '15') {
+            if (confirm(t('form.confirm_exit'))) {
+              onCancel();
+            }
+          } else {
+            onCancel();
+          }
+        }
+      });
+    }
+
+    // Top Navigation: Explicit Exit on steps 2-4
+    const exitBtn = container.querySelector('#btn-exit-flow');
+    if (exitBtn) {
+      exitBtn.addEventListener('click', () => {
+        if (confirm(t('form.confirm_exit'))) {
+          onCancel();
+        }
+      });
+    }
+
+    // Bottom Navigation: Previous
     const prevBtn = container.querySelector('#btn-prev-step');
     if (prevBtn) {
       prevBtn.addEventListener('click', () => {
@@ -541,53 +842,254 @@ export async function renderProtocolFormView(container, activity, session, onCom
       });
     }
 
+    // Bottom Navigation: Next
     const nextBtn = container.querySelector('#btn-next-step');
     if (nextBtn) {
       nextBtn.addEventListener('click', () => {
         syncStepData();
+
+        // If advancing from Step 2 to Step 3, perform quality check
+        if (currentStep === 2 && !acknowledgedNC) {
+          const issues = checkNonConformances();
+          if (issues.length > 0) {
+            showQualityAdvisory(issues, () => {
+              acknowledgedNC = true;
+              currentStep++;
+              renderStep();
+            });
+            return;
+          }
+        }
+
         currentStep++;
         renderStep();
       });
     }
 
-    // Step 2 Concrete events
-    if (currentStep === 2 && activity === 'CONCRETE') {
-      const chk = container.querySelector('#chk-formwork');
-      if (chk) {
-        chk.addEventListener('click', () => {
-          formData.measurements.formwork_approved = !formData.measurements.formwork_approved;
-          chk.classList.toggle('checked', formData.measurements.formwork_approved);
-        });
-      }
-
-      const addTruckBtn = container.querySelector('#btn-add-truck');
-      if (addTruckBtn) {
-        addTruckBtn.addEventListener('click', () => {
-          syncStepData();
-          const nextNum = trucksState.length + 1;
-          trucksState.push({
-            truck_number: nextNum,
-            mixer_id: `MIX-${String(nextNum).padStart(2, '0')}`,
-            delivery_note: `GR-${String(nextNum).padStart(3, '0')}`,
-            slump_cm: '10.5',
-            cylinders_cast: 4,
-            design_fc: trucksState[0]?.design_fc || 280,
-            notes: ''
+    // Step 2 Live Validation & Event Bindings
+    if (currentStep === 2) {
+      if (activity === 'CONCRETE') {
+        const chk = container.querySelector('#chk-formwork');
+        if (chk) {
+          chk.addEventListener('click', () => {
+            formData.measurements.formwork_approved = !formData.measurements.formwork_approved;
+            chk.classList.toggle('checked', formData.measurements.formwork_approved);
+            acknowledgedNC = false;
           });
-          renderStep();
-        });
-      }
+        }
 
-      container.querySelectorAll('.btn-remove-truck').forEach(btn => {
-        btn.addEventListener('click', (e) => {
-          syncStepData();
-          const idx = parseInt(btn.getAttribute('data-index'), 10);
-          trucksState.splice(idx, 1);
-          // renumber trucks
-          trucksState.forEach((t, i) => { t.truck_number = i + 1; });
-          renderStep();
+        const addTruckBtn = container.querySelector('#btn-add-truck');
+        if (addTruckBtn) {
+          addTruckBtn.addEventListener('click', () => {
+            syncStepData();
+            acknowledgedNC = false;
+            const nextNum = trucksState.length + 1;
+            trucksState.push({
+              truck_number: nextNum,
+              mixer_id: `MIX-${String(nextNum).padStart(2, '0')}`,
+              delivery_note: `GR-${String(nextNum).padStart(3, '0')}`,
+              slump_cm: '10.5',
+              cylinders_cast: 4,
+              design_fc: trucksState[0]?.design_fc || 280,
+              notes: ''
+            });
+            renderStep();
+          });
+        }
+
+        container.querySelectorAll('.btn-remove-truck').forEach(btn => {
+          btn.addEventListener('click', (e) => {
+            syncStepData();
+            acknowledgedNC = false;
+            const idx = parseInt(btn.getAttribute('data-index'), 10);
+            trucksState.splice(idx, 1);
+            // renumber trucks
+            trucksState.forEach((t, i) => { t.truck_number = i + 1; });
+            renderStep();
+          });
         });
-      });
+
+        // Attach live validation on truck cards
+        container.querySelectorAll('.truck-card').forEach((card, idx) => {
+          const slumpInput = card.querySelector('.truck-slump');
+          const cylInput = card.querySelector('.truck-cylinders');
+          const slumpMsg = card.querySelector('.slump-feedback-msg');
+          const cylMsg = card.querySelector('.cylinders-feedback-msg');
+
+          const updateLiveSlump = () => {
+            acknowledgedNC = false;
+            const val = parseFloat(slumpInput.value);
+            const crit = criteriaMap['slump_cm'] || { min_value: 8.9, max_value: 12.7 };
+            const rangeText = `${crit.min_value} - ${crit.max_value}`;
+            if (isNaN(val)) {
+              slumpInput.classList.remove('input-valid', 'input-invalid');
+              if (slumpMsg) slumpMsg.innerHTML = '';
+            } else if (val < crit.min_value || val > crit.max_value) {
+              slumpInput.classList.add('input-invalid');
+              slumpInput.classList.remove('input-valid');
+              if (slumpMsg) slumpMsg.innerHTML = `<div class="inline-validation-msg msg-error">${t('validation.slump_out', { range: rangeText })}</div>`;
+            } else {
+              slumpInput.classList.remove('input-invalid');
+              slumpInput.classList.add('input-valid');
+              if (slumpMsg) slumpMsg.innerHTML = `<div class="inline-validation-msg msg-ok">${t('validation.slump_ok', { range: rangeText })}</div>`;
+            }
+          };
+
+          const updateLiveCylinders = () => {
+            acknowledgedNC = false;
+            const val = parseInt(cylInput.value, 10);
+            const crit = criteriaMap['cylinders_cast'] || { min_value: 4 };
+            const minVal = crit.min_value || 4;
+            if (isNaN(val)) {
+              cylInput.classList.remove('input-valid', 'input-invalid');
+              if (cylMsg) cylMsg.innerHTML = '';
+            } else if (val < minVal) {
+              cylInput.classList.add('input-invalid');
+              cylInput.classList.remove('input-valid');
+              if (cylMsg) cylMsg.innerHTML = `<div class="inline-validation-msg msg-error">${t('validation.cylinders_out', { min: minVal })}</div>`;
+            } else {
+              cylInput.classList.remove('input-invalid');
+              cylInput.classList.add('input-valid');
+              if (cylMsg) cylMsg.innerHTML = `<div class="inline-validation-msg msg-ok">${t('validation.cylinders_ok', { min: minVal })}</div>`;
+            }
+          };
+
+          if (slumpInput) {
+            slumpInput.addEventListener('input', updateLiveSlump);
+            slumpInput.addEventListener('blur', updateLiveSlump);
+          }
+          if (cylInput) {
+            cylInput.addEventListener('input', updateLiveCylinders);
+            cylInput.addEventListener('blur', updateLiveCylinders);
+          }
+        });
+      } else if (activity === 'SURVEY') {
+        const elevInput = container.querySelector('#input-survey-elev');
+        const elevMsg = container.querySelector('#survey-feedback-msg');
+        const updateElev = () => {
+          acknowledgedNC = false;
+          const val = Math.abs(parseFloat(elevInput.value));
+          const maxVal = criteriaMap['elevation_deviation']?.max_value || 1.0;
+          if (isNaN(val)) {
+            elevInput.classList.remove('input-valid', 'input-invalid');
+            if (elevMsg) elevMsg.innerHTML = '';
+          } else if (val > maxVal) {
+            elevInput.classList.add('input-invalid');
+            elevInput.classList.remove('input-valid');
+            if (elevMsg) elevMsg.innerHTML = `<div class="inline-validation-msg msg-error">${t('validation.elev_out', { max: maxVal })}</div>`;
+          } else {
+            elevInput.classList.remove('input-invalid');
+            elevInput.classList.add('input-valid');
+            if (elevMsg) elevMsg.innerHTML = `<div class="inline-validation-msg msg-ok">${t('validation.elev_ok', { max: maxVal })}</div>`;
+          }
+        };
+        if (elevInput) {
+          elevInput.addEventListener('input', updateElev);
+          elevInput.addEventListener('blur', updateElev);
+          updateElev();
+        }
+      } else if (activity === 'COMPACTION') {
+        const compInput = container.querySelector('#input-comp-pct');
+        const compMsg = container.querySelector('#comp-feedback-msg');
+        const updateComp = () => {
+          acknowledgedNC = false;
+          const val = parseFloat(compInput.value);
+          const minVal = criteriaMap['compaction_pct']?.min_value || 100.0;
+          if (isNaN(val)) {
+            compInput.classList.remove('input-valid', 'input-invalid');
+            if (compMsg) compMsg.innerHTML = '';
+          } else if (val < minVal) {
+            compInput.classList.add('input-invalid');
+            compInput.classList.remove('input-valid');
+            if (compMsg) compMsg.innerHTML = `<div class="inline-validation-msg msg-error">${t('validation.comp_out', { min: minVal })}</div>`;
+          } else {
+            compInput.classList.remove('input-invalid');
+            compInput.classList.add('input-valid');
+            if (compMsg) compMsg.innerHTML = `<div class="inline-validation-msg msg-ok">${t('validation.comp_ok', { min: minVal })}</div>`;
+          }
+        };
+        if (compInput) {
+          compInput.addEventListener('input', updateComp);
+          compInput.addEventListener('blur', updateComp);
+          updateComp();
+        }
+
+        const moistInput = container.querySelector('#input-moisture');
+        const moistMsg = container.querySelector('#moisture-feedback-msg');
+        const updateMoist = () => {
+          acknowledgedNC = false;
+          const val = Math.abs(parseFloat(moistInput.value));
+          const maxVal = criteriaMap['moisture_deviation']?.max_value || 1.5;
+          if (isNaN(val)) {
+            moistInput.classList.remove('input-valid', 'input-invalid');
+            if (moistMsg) moistMsg.innerHTML = '';
+          } else if (val > maxVal) {
+            moistInput.classList.add('input-invalid');
+            moistInput.classList.remove('input-valid');
+            if (moistMsg) moistMsg.innerHTML = `<div class="inline-validation-msg msg-error">${t('validation.moisture_out', { max: maxVal })}</div>`;
+          } else {
+            moistInput.classList.remove('input-invalid');
+            moistInput.classList.add('input-valid');
+            if (moistMsg) moistMsg.innerHTML = `<div class="inline-validation-msg msg-ok">${t('validation.moisture_ok', { max: maxVal })}</div>`;
+          }
+        };
+        if (moistInput) {
+          moistInput.addEventListener('input', updateMoist);
+          moistInput.addEventListener('blur', updateMoist);
+          updateMoist();
+        }
+      } else if (activity === 'STEEL') {
+        const spInput = container.querySelector('#input-steel-spacing');
+        const spMsg = container.querySelector('#steel-spacing-feedback-msg');
+        const updateSpacing = () => {
+          acknowledgedNC = false;
+          const val = parseFloat(spInput.value);
+          const crit = criteriaMap['bar_spacing_cm'] || { min_value: 14.0, max_value: 16.0 };
+          const rangeText = `${crit.min_value} - ${crit.max_value}`;
+          if (isNaN(val)) {
+            spInput.classList.remove('input-valid', 'input-invalid');
+            if (spMsg) spMsg.innerHTML = '';
+          } else if (val < crit.min_value || val > crit.max_value) {
+            spInput.classList.add('input-invalid');
+            spInput.classList.remove('input-valid');
+            if (spMsg) spMsg.innerHTML = `<div class="inline-validation-msg msg-error">${t('validation.spacing_out', { range: rangeText })}</div>`;
+          } else {
+            spInput.classList.remove('input-invalid');
+            spInput.classList.add('input-valid');
+            if (spMsg) spMsg.innerHTML = `<div class="inline-validation-msg msg-ok">${t('validation.spacing_ok', { range: rangeText })}</div>`;
+          }
+        };
+        if (spInput) {
+          spInput.addEventListener('input', updateSpacing);
+          spInput.addEventListener('blur', updateSpacing);
+          updateSpacing();
+        }
+
+        const covInput = container.querySelector('#input-steel-cover');
+        const covMsg = container.querySelector('#steel-cover-feedback-msg');
+        const updateCover = () => {
+          acknowledgedNC = false;
+          const val = parseFloat(covInput.value);
+          const minVal = criteriaMap['concrete_cover_cm']?.min_value || 5.0;
+          if (isNaN(val)) {
+            covInput.classList.remove('input-valid', 'input-invalid');
+            if (covMsg) covMsg.innerHTML = '';
+          } else if (val < minVal) {
+            covInput.classList.add('input-invalid');
+            covInput.classList.remove('input-valid');
+            if (covMsg) covMsg.innerHTML = `<div class="inline-validation-msg msg-error">${t('validation.cover_out', { min: minVal })}</div>`;
+          } else {
+            covInput.classList.remove('input-invalid');
+            covInput.classList.add('input-valid');
+            if (covMsg) covMsg.innerHTML = `<div class="inline-validation-msg msg-ok">${t('validation.cover_ok', { min: minVal })}</div>`;
+          }
+        };
+        if (covInput) {
+          covInput.addEventListener('input', updateCover);
+          covInput.addEventListener('blur', updateCover);
+          updateCover();
+        }
+      }
     }
 
     // Step 3 Photo capture
@@ -595,26 +1097,28 @@ export async function renderProtocolFormView(container, activity, session, onCom
       const cameraInput = container.querySelector('#camera-input');
       const openCamBtn = container.querySelector('#btn-open-camera');
 
-      openCamBtn.addEventListener('click', () => cameraInput.click());
+      if (openCamBtn && cameraInput) {
+        openCamBtn.addEventListener('click', () => cameraInput.click());
 
-      cameraInput.addEventListener('change', async (e) => {
-        const file = e.target.files[0];
-        if (!file) return;
+        cameraInput.addEventListener('change', async (e) => {
+          const file = e.target.files[0];
+          if (!file) return;
 
-        const reader = new FileReader();
-        reader.onload = async (event) => {
-          const photoId = `photo_client_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
-          const photoObj = {
-            id: photoId,
-            blob: file,
-            dataUrl: event.target.result
+          const reader = new FileReader();
+          reader.onload = async (event) => {
+            const photoId = `photo_client_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
+            const photoObj = {
+              id: photoId,
+              blob: file,
+              dataUrl: event.target.result
+            };
+            formData.localPhotos.push(photoObj);
+            await storeLocalPhoto(photoId, file, { gps: formData.gps, captured_at: new Date().toISOString() });
+            renderStep();
           };
-          formData.localPhotos.push(photoObj);
-          await storeLocalPhoto(photoId, file, { gps: formData.gps, captured_at: new Date().toISOString() });
-          renderStep();
-        };
-        reader.readAsDataURL(file);
-      });
+          reader.readAsDataURL(file);
+        });
+      }
 
       container.querySelectorAll('.btn-remove-photo').forEach(btn => {
         btn.addEventListener('click', () => {

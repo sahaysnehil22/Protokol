@@ -18,7 +18,7 @@ export function renderProjectSetupView(container, onProjectCreated, onCancel) {
         </p>
       </div>
 
-      <form id="project-setup-form">
+      <form id="project-setup-form" novalidate>
         <!-- 1. Identificación del Proyecto -->
         <div style="font-size: 13px; font-weight: 800; color: #0284C7; text-transform: uppercase; margin-bottom: 12px;">
           1. Información del Contrato
@@ -70,29 +70,48 @@ export function renderProjectSetupView(container, onProjectCreated, onCancel) {
           2. Criterios Técnicos de Concreto (Mixers y Probetas)
         </div>
 
-        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
-          <div class="form-group">
-            <label class="form-label">${t('setup.cylinders_per_truck')}</label>
+        <div class="form-group">
+          <label class="form-label">${t('setup.cylinders_per_truck')}</label>
+          <div class="input-wrapper">
             <input type="number" id="proj-cylinders" class="form-input" value="4" min="1" max="10" required />
+            <span class="input-unit">probetas / mixer</span>
           </div>
-          <div class="form-group">
-            <label class="form-label">${t('setup.default_fc')}</label>
-            <div style="display: flex; gap: 8px;">
-              <input type="number" id="proj-fc" class="form-input" value="210" min="50" max="1000" step="5" required style="font-weight: 700; flex: 1;" />
-              <select id="proj-fc-preset" class="form-input" style="width: 140px; font-size: 11px; color: #475569;">
-                <option value="">Presets...</option>
-                <option value="140">140 (Solado)</option>
-                <option value="175">175 (Muros)</option>
-                <option value="210">210 (Estructural)</option>
-                <option value="245">245 (Puentes)</option>
-                <option value="280">280 (Pavimento)</option>
-                <option value="315">315 (Vigas Post.)</option>
-                <option value="350">350 (Alta Res.)</option>
-                <option value="420">420 (Especial)</option>
+          <span class="form-label-hint">Cantidad obligatoria de testigos por cada mixer (v2.4 norma: 4 probetas).</span>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">${t('setup.default_fc')}</label>
+          
+          <!-- 1-Tap Quick Select Pills for Mobile Field Ergonomics -->
+          <div class="fc-chips-container" id="fc-chips-list">
+            <button type="button" class="btn-fc-chip" data-val="140">140 (Solado)</button>
+            <button type="button" class="btn-fc-chip" data-val="175">175 (Muros)</button>
+            <button type="button" class="btn-fc-chip active" data-val="210">210 (Estructural)</button>
+            <button type="button" class="btn-fc-chip" data-val="280">280 (Pavimento)</button>
+            <button type="button" class="btn-fc-chip" data-val="custom">Otro ▼</button>
+          </div>
+
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; align-items: center;">
+            <div class="input-wrapper">
+              <input type="number" id="proj-fc" class="form-input" value="210" min="50" max="1000" step="5" required style="font-weight: 800; font-size: 16px;" />
+              <span class="input-unit">kg/cm²</span>
+            </div>
+            <div>
+              <select id="proj-fc-preset" class="form-input" style="font-size: 13px;">
+                <option value="210">210 kg/cm² (Estructural)</option>
+                <option value="280">280 kg/cm² (Pavimento)</option>
+                <option value="175">175 kg/cm² (Muros)</option>
+                <option value="140">140 kg/cm² (Solado)</option>
+                <option value="245">245 kg/cm² (Puentes)</option>
+                <option value="315">315 kg/cm² (Vigas Post.)</option>
+                <option value="350">350 kg/cm² (Alta Res.)</option>
+                <option value="420">420 kg/cm² (Especial)</option>
+                <option value="custom">Otro personalizado...</option>
               </select>
             </div>
-            <span class="form-label-hint">kg/cm² (Ingrese cualquier valor numérico o elija un preset)</span>
           </div>
+          <div id="fc-validation-hint" style="display: none; margin-top: 6px;" class="inline-validation-msg msg-error"></div>
+          <span class="form-label-hint">kg/cm² — Toque un preset rápido o escriba cualquier valor del expediente.</span>
         </div>
 
         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
@@ -135,12 +154,108 @@ export function renderProjectSetupView(container, onProjectCreated, onCancel) {
   const addTechBtn = container.querySelector('#btn-add-tech-row');
   const fcInput = container.querySelector('#proj-fc');
   const fcPreset = container.querySelector('#proj-fc-preset');
+  const fcChips = container.querySelectorAll('.btn-fc-chip');
+  const fcValidationHint = container.querySelector('#fc-validation-hint');
 
-  if (fcPreset && fcInput) {
-    fcPreset.addEventListener('change', () => {
-      if (fcPreset.value) {
-        fcInput.value = fcPreset.value;
+  function validateAndSyncFc(val, source) {
+    const num = parseFloat(val);
+    if (fcValidationHint) {
+      fcValidationHint.style.display = 'none';
+      fcValidationHint.innerText = '';
+    }
+    if (fcInput) {
+      fcInput.setCustomValidity('');
+    }
+
+    if (isNaN(num)) {
+      if (fcValidationHint) {
+        fcValidationHint.innerText = '⚠️ Ingrese un valor numérico para f\'c';
+        fcValidationHint.style.display = 'flex';
       }
+      return;
+    }
+
+    if (num > 1000) {
+      if (fcValidationHint) {
+        fcValidationHint.innerText = '⚠️ El valor de f\'c debe ser menor o igual a 1000 kg/cm²';
+        fcValidationHint.style.display = 'flex';
+      }
+      fcInput.classList.add('input-invalid');
+      fcInput.classList.remove('input-valid');
+      return;
+    } else if (num < 50) {
+      if (fcValidationHint) {
+        fcValidationHint.innerText = '⚠️ El valor de f\'c debe ser al menos 50 kg/cm²';
+        fcValidationHint.style.display = 'flex';
+      }
+      fcInput.classList.add('input-invalid');
+      fcInput.classList.remove('input-valid');
+      return;
+    } else {
+      fcInput.classList.remove('input-invalid');
+      fcInput.classList.add('input-valid');
+    }
+
+    // Synchronize dropdown selection if triggered from input or chip
+    if (source !== 'dropdown' && fcPreset) {
+      const match = Array.from(fcPreset.options).find(o => o.value === String(num));
+      if (match) {
+        fcPreset.value = String(num);
+      } else {
+        fcPreset.value = 'custom';
+      }
+    }
+
+    // Synchronize chip highlight
+    fcChips.forEach(chip => {
+      const cVal = chip.getAttribute('data-val');
+      if (cVal === String(num) || (cVal === 'custom' && fcPreset && fcPreset.value === 'custom')) {
+        chip.classList.add('active');
+      } else {
+        chip.classList.remove('active');
+      }
+    });
+  }
+
+  // Handle preset dropdown change and input
+  if (fcPreset && fcInput) {
+    const onPresetChange = () => {
+      if (!fcPreset.value) return;
+      if (fcPreset.value === 'custom') {
+        fcChips.forEach(c => c.classList.toggle('active', c.getAttribute('data-val') === 'custom'));
+        fcInput.focus();
+        return;
+      }
+      fcInput.value = fcPreset.value;
+      validateAndSyncFc(fcPreset.value, 'dropdown');
+    };
+    fcPreset.addEventListener('change', onPresetChange);
+    fcPreset.addEventListener('input', onPresetChange);
+  }
+
+  // Handle quick chip clicks
+  fcChips.forEach(chip => {
+    chip.addEventListener('click', () => {
+      const cVal = chip.getAttribute('data-val');
+      if (cVal === 'custom') {
+        if (fcPreset) fcPreset.value = 'custom';
+        fcChips.forEach(c => c.classList.toggle('active', c === chip));
+        fcInput.focus();
+      } else {
+        fcInput.value = cVal;
+        if (fcPreset) fcPreset.value = cVal;
+        validateAndSyncFc(cVal, 'chip');
+      }
+    });
+  });
+
+  // Handle numeric input change
+  if (fcInput) {
+    fcInput.addEventListener('input', () => {
+      validateAndSyncFc(fcInput.value, 'input');
+    });
+    fcInput.addEventListener('blur', () => {
+      validateAndSyncFc(fcInput.value, 'input');
     });
   }
 
@@ -254,6 +369,20 @@ export function renderProjectSetupView(container, onProjectCreated, onCancel) {
     const default_design_fc = parseFloat(container.querySelector('#proj-fc').value);
     const slump_min = parseFloat(container.querySelector('#proj-slump-min').value);
     const slump_max = parseFloat(container.querySelector('#proj-slump-max').value);
+
+    if (isNaN(default_design_fc) || default_design_fc < 50 || default_design_fc > 1000) {
+      errorDiv.innerText = 'El valor de f\'c de diseño debe ser un número válido entre 50 y 1000 kg/cm².';
+      errorDiv.style.display = 'block';
+      fcInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      fcInput.focus();
+      return;
+    }
+
+    if (isNaN(slump_min) || isNaN(slump_max) || slump_min >= slump_max) {
+      errorDiv.innerText = 'El asentamiento (slump) mínimo debe ser un número menor al slump máximo.';
+      errorDiv.style.display = 'block';
+      return;
+    }
 
     // Validate technicians
     if (engineersList.length === 0) {

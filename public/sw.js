@@ -1,4 +1,4 @@
-const CACHE_NAME = 'protokol-cache-v1.0';
+const CACHE_NAME = 'protokol-cache-v2.5';
 const ASSETS_TO_CACHE = [
   '/',
   '/index.html',
@@ -8,11 +8,14 @@ const ASSETS_TO_CACHE = [
   '/css/forms.css',
   '/js/app.js',
   '/js/db.js',
+  '/js/i18n.js',
   '/js/sync.js',
   '/js/location.js',
   '/js/views/identify.js',
   '/js/views/home.js',
   '/js/views/protocol_form.js',
+  '/js/views/project_setup.js',
+  '/js/views/project_portal.js',
   '/js/views/verdict.js',
   '/js/views/queue.js',
   '/js/views/status_view.js',
@@ -23,7 +26,7 @@ const ASSETS_TO_CACHE = [
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
-      console.log('[ServiceWorker] Caching app shell assets');
+      console.log('[ServiceWorker] Caching app shell assets v2.5');
       return cache.addAll(ASSETS_TO_CACHE);
     }).then(() => self.skipWaiting())
   );
@@ -45,24 +48,24 @@ self.addEventListener('activate', (event) => {
 });
 
 self.addEventListener('fetch', (event) => {
-  // Pass API calls through directly, fallback to offline error handled by app db
+  // Pass API calls through directly
   if (event.request.url.includes('/api/')) {
     return;
   }
 
+  // Network-First with Cache Fallback for offline resilience
   event.respondWith(
-    caches.match(event.request).then((cachedResponse) => {
-      if (cachedResponse) {
-        // Return cached asset, fetch update in background (Stale-While-Revalidate)
-        fetch(event.request).then((networkResponse) => {
-          if (networkResponse && networkResponse.status === 200) {
-            caches.open(CACHE_NAME).then((cache) => cache.put(event.request, networkResponse));
-          }
-        }).catch(() => {});
-        return cachedResponse;
+    fetch(event.request).then((networkResponse) => {
+      if (networkResponse && networkResponse.status === 200 && event.request.method === 'GET') {
+        const responseClone = networkResponse.clone();
+        caches.open(CACHE_NAME).then((cache) => cache.put(event.request, responseClone));
       }
-      return fetch(event.request).catch(() => {
-        // Fallback to index.html for navigation requests
+      return networkResponse;
+    }).catch(() => {
+      return caches.match(event.request).then((cachedResponse) => {
+        if (cachedResponse) {
+          return cachedResponse;
+        }
         if (event.request.mode === 'navigate') {
           return caches.match('/index.html');
         }
@@ -70,3 +73,4 @@ self.addEventListener('fetch', (event) => {
     })
   );
 });
+
