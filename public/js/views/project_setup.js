@@ -81,37 +81,25 @@ export function renderProjectSetupView(container, onProjectCreated, onCancel) {
 
         <div class="form-group">
           <label class="form-label">${t('setup.default_fc')}</label>
-          
-          <!-- 1-Tap Quick Select Pills for Mobile Field Ergonomics -->
-          <div class="fc-chips-container" id="fc-chips-list">
-            <button type="button" class="btn-fc-chip" data-val="140">140 (Solado)</button>
-            <button type="button" class="btn-fc-chip" data-val="175">175 (Muros)</button>
-            <button type="button" class="btn-fc-chip active" data-val="210">210 (Estructural)</button>
-            <button type="button" class="btn-fc-chip" data-val="280">280 (Pavimento)</button>
-            <button type="button" class="btn-fc-chip" data-val="custom">Otro ▼</button>
-          </div>
-
-          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; align-items: center;">
+          <select id="proj-fc-select" class="form-input" style="font-weight: 700; font-size: 15px;">
+            <option value="280">280 kg/cm² (Pavimento Rígido — Norma MTC)</option>
+            <option value="210">210 kg/cm² (Estructural / Zapatas / Vigas)</option>
+            <option value="175">175 kg/cm² (Muros y Cimientos)</option>
+            <option value="140">140 kg/cm² (Solados y Rellenos)</option>
+            <option value="245">245 kg/cm² (Puentes y Estructuras)</option>
+            <option value="315">315 kg/cm² (Vigas Postensadas)</option>
+            <option value="350">350 kg/cm² (Alta Resistencia)</option>
+            <option value="420">420 kg/cm² (Especial / Prefabricados)</option>
+            <option value="custom">✏️ Otro valor (Personalizado)...</option>
+          </select>
+          <div id="fc-custom-container" style="display: none; margin-top: 8px;">
             <div class="input-wrapper">
-              <input type="number" id="proj-fc" class="form-input" value="210" min="50" max="1000" step="5" required style="font-weight: 800; font-size: 16px;" />
+              <input type="number" id="proj-fc-custom" class="form-input" placeholder="Ej. 250" min="50" max="1000" step="5" style="font-size: 15px; font-weight: 700;" />
               <span class="input-unit">kg/cm²</span>
             </div>
-            <div>
-              <select id="proj-fc-preset" class="form-input" style="font-size: 13px;">
-                <option value="210">210 kg/cm² (Estructural)</option>
-                <option value="280">280 kg/cm² (Pavimento)</option>
-                <option value="175">175 kg/cm² (Muros)</option>
-                <option value="140">140 kg/cm² (Solado)</option>
-                <option value="245">245 kg/cm² (Puentes)</option>
-                <option value="315">315 kg/cm² (Vigas Post.)</option>
-                <option value="350">350 kg/cm² (Alta Res.)</option>
-                <option value="420">420 kg/cm² (Especial)</option>
-                <option value="custom">Otro personalizado...</option>
-              </select>
-            </div>
+            <span class="form-label-hint">Ingrese el valor numérico exacto en kg/cm² especificado en el expediente.</span>
           </div>
-          <div id="fc-validation-hint" style="display: none; margin-top: 6px;" class="inline-validation-msg msg-error"></div>
-          <span class="form-label-hint">kg/cm² — Toque un preset rápido o escriba cualquier valor del expediente.</span>
+          <span class="form-label-hint">Resistencia a la compresión requerida a los 28 días para la mezcla de concreto.</span>
         </div>
 
         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
@@ -152,110 +140,19 @@ export function renderProjectSetupView(container, onProjectCreated, onCancel) {
   const errorDiv = container.querySelector('#setup-error');
   const rosterContainer = container.querySelector('#tech-roster-container');
   const addTechBtn = container.querySelector('#btn-add-tech-row');
-  const fcInput = container.querySelector('#proj-fc');
-  const fcPreset = container.querySelector('#proj-fc-preset');
-  const fcChips = container.querySelectorAll('.btn-fc-chip');
-  const fcValidationHint = container.querySelector('#fc-validation-hint');
+  const fcSelect = container.querySelector('#proj-fc-select');
+  const fcCustomContainer = container.querySelector('#fc-custom-container');
+  const fcCustomInput = container.querySelector('#proj-fc-custom');
 
-  function validateAndSyncFc(val, source) {
-    const num = parseFloat(val);
-    if (fcValidationHint) {
-      fcValidationHint.style.display = 'none';
-      fcValidationHint.innerText = '';
-    }
-    if (fcInput) {
-      fcInput.setCustomValidity('');
-    }
-
-    if (isNaN(num)) {
-      if (fcValidationHint) {
-        fcValidationHint.innerText = '⚠️ Ingrese un valor numérico para f\'c';
-        fcValidationHint.style.display = 'flex';
-      }
-      return;
-    }
-
-    if (num > 1000) {
-      if (fcValidationHint) {
-        fcValidationHint.innerText = '⚠️ El valor de f\'c debe ser menor o igual a 1000 kg/cm²';
-        fcValidationHint.style.display = 'flex';
-      }
-      fcInput.classList.add('input-invalid');
-      fcInput.classList.remove('input-valid');
-      return;
-    } else if (num < 50) {
-      if (fcValidationHint) {
-        fcValidationHint.innerText = '⚠️ El valor de f\'c debe ser al menos 50 kg/cm²';
-        fcValidationHint.style.display = 'flex';
-      }
-      fcInput.classList.add('input-invalid');
-      fcInput.classList.remove('input-valid');
-      return;
-    } else {
-      fcInput.classList.remove('input-invalid');
-      fcInput.classList.add('input-valid');
-    }
-
-    // Synchronize dropdown selection if triggered from input or chip
-    if (source !== 'dropdown' && fcPreset) {
-      const match = Array.from(fcPreset.options).find(o => o.value === String(num));
-      if (match) {
-        fcPreset.value = String(num);
+  if (fcSelect) {
+    fcSelect.addEventListener('change', () => {
+      if (fcSelect.value === 'custom') {
+        fcCustomContainer.style.display = 'block';
+        if (fcCustomInput) fcCustomInput.focus();
       } else {
-        fcPreset.value = 'custom';
+        fcCustomContainer.style.display = 'none';
+        if (fcCustomInput) fcCustomInput.value = '';
       }
-    }
-
-    // Synchronize chip highlight
-    fcChips.forEach(chip => {
-      const cVal = chip.getAttribute('data-val');
-      if (cVal === String(num) || (cVal === 'custom' && fcPreset && fcPreset.value === 'custom')) {
-        chip.classList.add('active');
-      } else {
-        chip.classList.remove('active');
-      }
-    });
-  }
-
-  // Handle preset dropdown change and input
-  if (fcPreset && fcInput) {
-    const onPresetChange = () => {
-      if (!fcPreset.value) return;
-      if (fcPreset.value === 'custom') {
-        fcChips.forEach(c => c.classList.toggle('active', c.getAttribute('data-val') === 'custom'));
-        fcInput.focus();
-        return;
-      }
-      fcInput.value = fcPreset.value;
-      validateAndSyncFc(fcPreset.value, 'dropdown');
-    };
-    fcPreset.addEventListener('change', onPresetChange);
-    fcPreset.addEventListener('input', onPresetChange);
-  }
-
-  // Handle quick chip clicks
-  fcChips.forEach(chip => {
-    chip.addEventListener('click', () => {
-      const cVal = chip.getAttribute('data-val');
-      if (cVal === 'custom') {
-        if (fcPreset) fcPreset.value = 'custom';
-        fcChips.forEach(c => c.classList.toggle('active', c === chip));
-        fcInput.focus();
-      } else {
-        fcInput.value = cVal;
-        if (fcPreset) fcPreset.value = cVal;
-        validateAndSyncFc(cVal, 'chip');
-      }
-    });
-  });
-
-  // Handle numeric input change
-  if (fcInput) {
-    fcInput.addEventListener('input', () => {
-      validateAndSyncFc(fcInput.value, 'input');
-    });
-    fcInput.addEventListener('blur', () => {
-      validateAndSyncFc(fcInput.value, 'input');
     });
   }
 
@@ -366,16 +263,17 @@ export function renderProjectSetupView(container, onProjectCreated, onCancel) {
     const location = container.querySelector('#proj-location').value.trim();
     const road_section = container.querySelector('#proj-section').value.trim();
     const cylinders_per_truck = parseInt(container.querySelector('#proj-cylinders').value, 10);
-    const default_design_fc = parseFloat(container.querySelector('#proj-fc').value);
-    const slump_min = parseFloat(container.querySelector('#proj-slump-min').value);
-    const slump_max = parseFloat(container.querySelector('#proj-slump-max').value);
-
-    if (isNaN(default_design_fc) || default_design_fc < 50 || default_design_fc > 1000) {
-      errorDiv.innerText = 'El valor de f\'c de diseño debe ser un número válido entre 50 y 1000 kg/cm².';
-      errorDiv.style.display = 'block';
-      fcInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      fcInput.focus();
-      return;
+    let default_design_fc;
+    if (fcSelect.value === 'custom') {
+      default_design_fc = parseFloat(fcCustomInput.value);
+      if (isNaN(default_design_fc) || default_design_fc < 50 || default_design_fc > 1000) {
+        errorDiv.innerText = 'El valor de f\'c personalizado debe ser un número válido entre 50 y 1000 kg/cm².';
+        errorDiv.style.display = 'block';
+        fcCustomInput.focus();
+        return;
+      }
+    } else {
+      default_design_fc = parseFloat(fcSelect.value);
     }
 
     if (isNaN(slump_min) || isNaN(slump_max) || slump_min >= slump_max) {
