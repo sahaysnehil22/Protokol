@@ -47,13 +47,14 @@ export function createApp(dbInstance?: any) {
 }
 
 if (process.env.NODE_ENV !== 'test' && !process.env.VITEST) {
-  const { app } = createApp();
+  const { app, db } = createApp();
   const server = app.listen(config.port, config.host, () => {
+    const projectCount = db.prepare('SELECT count(*) as count FROM projects').get() as { count: number };
     console.log(`====================================================`);
     console.log(`🚀 PROTOKOL Phase 0 Server Running`);
     console.log(`📍 URL: http://${config.host}:${config.port}`);
-    console.log(`📁 Project: ${config.pilotProjectName} (${config.pilotProjectId})`);
-    console.log(`⏱ Timezone: ${config.projectTimezoneName} (${config.projectTimezoneOffset})`);
+    console.log(`📁 Configured Projects: ${projectCount.count}`);
+    console.log(`⏱ Default Timezone: ${config.defaultTimezoneName} (${config.defaultTimezoneOffset})`);
     console.log(`📱 PWA Field Client: Ready on root URL`);
     console.log(`====================================================`);
   });

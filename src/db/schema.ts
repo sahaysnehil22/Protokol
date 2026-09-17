@@ -1,6 +1,13 @@
 import { DatabaseSync } from 'node:sqlite';
 
+/**
+ * Initializes the database schema and performs safe migrations for existing tables.
+ */
 export function initializeSchema(db: DatabaseSync): void {
+  // First, run safe migrations for any preexisting tables so new columns exist
+  runSafeMigrations(db);
+
+  // Execute base tables creation
   db.exec(`
     -- 1. Projects Table
     CREATE TABLE IF NOT EXISTS projects (
@@ -9,6 +16,16 @@ export function initializeSchema(db: DatabaseSync): void {
       contract_number TEXT NOT NULL,
       entity TEXT NOT NULL,
       execution_mode TEXT NOT NULL,
+      location TEXT,
+      road_section TEXT,
+      timezone TEXT NOT NULL DEFAULT 'America/Lima',
+      timezone_offset TEXT NOT NULL DEFAULT '-05:00',
+      whatsapp_recipients TEXT,
+      sampling_basis TEXT NOT NULL DEFAULT 'PER_TRUCK',
+      cylinders_per_truck INTEGER NOT NULL DEFAULT 4,
+      default_design_fc REAL NOT NULL DEFAULT 210,
+      metadata TEXT,
+      updated_at TEXT,
       created_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
 
@@ -21,6 +38,7 @@ export function initializeSchema(db: DatabaseSync): void {
       device_token TEXT NOT NULL,
       whatsapp TEXT NOT NULL,
       role TEXT NOT NULL,
+      cip_number TEXT,
       created_at TEXT NOT NULL DEFAULT (datetime('now')),
       FOREIGN KEY (project_id) REFERENCES projects(id)
     );
@@ -98,7 +116,6 @@ export function initializeSchema(db: DatabaseSync): void {
     BEFORE UPDATE ON protocols
     FOR EACH ROW
     BEGIN
-      -- Prevent alteration of core measurements, timestamps, GPS, or identity
       SELECT CASE
         WHEN OLD.id != NEW.id THEN
           RAISE(ABORT, 'IMMUTABILITY_VIOLATION: Cannot modify protocol ID')
@@ -126,10 +143,32 @@ export function initializeSchema(db: DatabaseSync): void {
       END;
     END;
 
-    -- 6. Cylinders Table (Deferred Concrete Laboratory Tests)
+    -- 6. Concrete Trucks Table (v2.4 Multi-Truck Pour Architecture)
+    CREATE TABLE IF NOT EXISTS concrete_trucks (
+      id TEXT PRIMARY KEY, -- trk_...
+      protocol_id TEXT NOT NULL,
+      truck_number INTEGER NOT NULL,
+      mixer_id TEXT NOT NULL,
+      delivery_note TEXT NOT NULL,
+      slump_cm REAL NOT NULL,
+      cylinders_cast INTEGER NOT NULL DEFAULT 4,
+      design_fc REAL NOT NULL,
+      slump_verdict TEXT NOT NULL, -- PASS | FAIL
+      notes TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      FOREIGN KEY (protocol_id) REFERENCES protocols(id)
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_concrete_trucks_protocol ON concrete_trucks(protocol_id);
+    CREATE INDEX IF NOT EXISTS idx_concrete_trucks_mixer ON concrete_trucks(mixer_id);
+
+    -- 7. Cylinders Table (Deferred Concrete Laboratory Tests)
     CREATE TABLE IF NOT EXISTS cylinders (
       id TEXT PRIMARY KEY,
       protocol_id TEXT NOT NULL,
+      truck_id TEXT, -- References concrete_trucks(id)
+      truck_number INTEGER,
+      specimen_number INTEGER,
       cylinder_code TEXT NOT NULL,
       cast_date TEXT NOT NULL,
       test_date TEXT,
@@ -142,16 +181,19 @@ export function initializeSchema(db: DatabaseSync): void {
       verdict TEXT, -- PASS | FAIL
       created_at TEXT NOT NULL DEFAULT (datetime('now')),
       FOREIGN KEY (protocol_id) REFERENCES protocols(id),
+      FOREIGN KEY (truck_id) REFERENCES concrete_trucks(id),
       FOREIGN KEY (report_photo_id) REFERENCES photos(id)
     );
 
     CREATE INDEX IF NOT EXISTS idx_cylinders_protocol ON cylinders(protocol_id);
+    CREATE INDEX IF NOT EXISTS idx_cylinders_truck ON cylinders(truck_id);
     CREATE INDEX IF NOT EXISTS idx_cylinders_status ON cylinders(status);
 
-    -- 7. Non-Conformances Table
+    -- 8. Non-Conformances Table
     CREATE TABLE IF NOT EXISTS nonconformances (
       id TEXT PRIMARY KEY, -- NC-YYYYMMDD-...
       protocol_id TEXT NOT NULL,
+      truck_id TEXT,
       criterion_id TEXT,
       field TEXT NOT NULL,
       expected_value TEXT NOT NULL,
@@ -163,14 +205,16 @@ export function initializeSchema(db: DatabaseSync): void {
       closed_by_technician_id TEXT,
       created_at TEXT NOT NULL DEFAULT (datetime('now')),
       FOREIGN KEY (protocol_id) REFERENCES protocols(id),
+      FOREIGN KEY (truck_id) REFERENCES concrete_trucks(id),
       FOREIGN KEY (criterion_id) REFERENCES criteria(id),
       FOREIGN KEY (closed_by_technician_id) REFERENCES technicians(id)
     );
 
     CREATE INDEX IF NOT EXISTS idx_nc_protocol ON nonconformances(protocol_id);
+    CREATE INDEX IF NOT EXISTS idx_nc_truck ON nonconformances(truck_id);
     CREATE INDEX IF NOT EXISTS idx_nc_status ON nonconformances(status);
 
-    -- 8. Notifications Table
+    -- 9. Notifications Table
     CREATE TABLE IF NOT EXISTS notifications (
       id TEXT PRIMARY KEY,
       project_id TEXT NOT NULL,
@@ -185,7 +229,7 @@ export function initializeSchema(db: DatabaseSync): void {
 
     CREATE INDEX IF NOT EXISTS idx_notifications_project ON notifications(project_id);
 
-    -- 9. Protocol Schedules Table (R10 Overdue Rule)
+    -- 10. Protocol Schedules Table (R10 Overdue Rule)
     CREATE TABLE IF NOT EXISTS protocol_schedules (
       id TEXT PRIMARY KEY,
       project_id TEXT NOT NULL,
@@ -199,4 +243,56 @@ export function initializeSchema(db: DatabaseSync): void {
 
     CREATE INDEX IF NOT EXISTS idx_schedules_overdue ON protocol_schedules(scheduled_at, notified_overdue_at);
   `);
+
+  // Safe migrations for preexisting databases
+  runSafeMigrations(db);
+}
+
+/**
+ * Safely adds new columns if they do not already exist in historical SQLite databases.
+ */
+function runSafeMigrations(db: DatabaseSync): void {
+  const getTableColumns = (table: string): Set<string> => {
+    try {
+      const rows = db.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>;
+      return new Set(rows.map(r => r.name));
+    } catch {
+      return new Set();
+    }
+  };
+
+  // Projects table migrations
+  const projectCols = getTableColumns('projects');
+  if (projectCols.size > 0) {
+    if (!projectCols.has('location')) db.exec(`ALTER TABLE projects ADD COLUMN location TEXT;`);
+    if (!projectCols.has('road_section')) db.exec(`ALTER TABLE projects ADD COLUMN road_section TEXT;`);
+    if (!projectCols.has('timezone')) db.exec(`ALTER TABLE projects ADD COLUMN timezone TEXT NOT NULL DEFAULT 'America/Lima';`);
+    if (!projectCols.has('timezone_offset')) db.exec(`ALTER TABLE projects ADD COLUMN timezone_offset TEXT NOT NULL DEFAULT '-05:00';`);
+    if (!projectCols.has('whatsapp_recipients')) db.exec(`ALTER TABLE projects ADD COLUMN whatsapp_recipients TEXT;`);
+    if (!projectCols.has('sampling_basis')) db.exec(`ALTER TABLE projects ADD COLUMN sampling_basis TEXT NOT NULL DEFAULT 'PER_TRUCK';`);
+    if (!projectCols.has('cylinders_per_truck')) db.exec(`ALTER TABLE projects ADD COLUMN cylinders_per_truck INTEGER NOT NULL DEFAULT 4;`);
+    if (!projectCols.has('default_design_fc')) db.exec(`ALTER TABLE projects ADD COLUMN default_design_fc REAL NOT NULL DEFAULT 210;`);
+    if (!projectCols.has('metadata')) db.exec(`ALTER TABLE projects ADD COLUMN metadata TEXT;`);
+    if (!projectCols.has('updated_at')) db.exec(`ALTER TABLE projects ADD COLUMN updated_at TEXT;`);
+  }
+
+  // Technicians table migrations
+  const techCols = getTableColumns('technicians');
+  if (techCols.size > 0) {
+    if (!techCols.has('cip_number')) db.exec(`ALTER TABLE technicians ADD COLUMN cip_number TEXT;`);
+  }
+
+  // Cylinders table migrations
+  const cylCols = getTableColumns('cylinders');
+  if (cylCols.size > 0) {
+    if (!cylCols.has('truck_id')) db.exec(`ALTER TABLE cylinders ADD COLUMN truck_id TEXT;`);
+    if (!cylCols.has('truck_number')) db.exec(`ALTER TABLE cylinders ADD COLUMN truck_number INTEGER;`);
+    if (!cylCols.has('specimen_number')) db.exec(`ALTER TABLE cylinders ADD COLUMN specimen_number INTEGER;`);
+  }
+
+  // Nonconformances table migrations
+  const ncCols = getTableColumns('nonconformances');
+  if (ncCols.size > 0) {
+    if (!ncCols.has('truck_id')) db.exec(`ALTER TABLE nonconformances ADD COLUMN truck_id TEXT;`);
+  }
 }

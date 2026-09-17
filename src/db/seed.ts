@@ -1,49 +1,62 @@
 import { DatabaseSync } from 'node:sqlite';
-import { config } from '../config.js';
 import { hashPin } from '../services/integrity.service.js';
 
+export const PILOT_PROJECT_ID = 'AY-728-001';
+
 export function seedDatabase(db: DatabaseSync): void {
-  // 1. Seed Pilot Project
+  // 1. Seed Pilot Project (Data, not code constants)
   const insertProject = db.prepare(`
-    INSERT OR REPLACE INTO projects (id, name, contract_number, entity, execution_mode)
-    VALUES (?, ?, ?, ?, ?)
+    INSERT OR REPLACE INTO projects (
+      id, name, contract_number, entity, execution_mode,
+      location, road_section, timezone, timezone_offset,
+      whatsapp_recipients, sampling_basis, cylinders_per_truck, default_design_fc
+    )
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
 
   insertProject.run(
-    config.pilotProjectId,
-    config.pilotProjectName,
-    config.pilotContractNumber,
-    config.pilotEntity,
-    config.pilotExecutionMode
+    PILOT_PROJECT_ID,
+    'Mejoramiento y Ampliación de Transitabilidad AY-728 a AY-729',
+    'N° 81-2026-GRA-SEDECENTRAL-OAPF',
+    'Gobierno Regional de Ayacucho',
+    'Administración Directa',
+    'Ayacucho, Perú',
+    'Tramo AY-728 a AY-729 (km 0+000 a 2+380)',
+    'America/Lima',
+    '-05:00',
+    '+51966000001',
+    'PER_TRUCK',
+    4,
+    280
   );
 
-  // 2. Seed Technicians (Execution & Supervision Teams from Document v2.2)
+  // 2. Seed Technicians (Execution & Supervision Teams from v2.4)
   const insertTech = db.prepare(`
-    INSERT OR REPLACE INTO technicians (id, project_id, name, pin_hash, device_token, whatsapp, role)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
+    INSERT OR REPLACE INTO technicians (id, project_id, name, pin_hash, device_token, whatsapp, role, cip_number)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
   `);
 
   const defaultPinHash = hashPin('1234');
 
   const teamMembers = [
     // Execution Team
-    { id: 'tech_quality_spec', name: 'Ing. Especialista de Calidad', role: 'Quality Specialist', phone: '+51966000001', device: 'dvc_pilot_qa_01' },
-    { id: 'tech_resident', name: 'Ing. Residente de Obra', role: 'Site Resident', phone: '+51966000002', device: 'dvc_pilot_res_02' },
-    { id: 'tech_soils', name: 'Ing. Especialista en Suelos', role: 'Soils Specialist', phone: '+51966000003', device: 'dvc_pilot_soils_03' },
-    { id: 'tech_assistant_exec', name: 'Tec. Jorge Huamán (Asistente)', role: 'Assistant', phone: '+51966000004', device: 'dvc_pilot_asst_04' },
-    { id: 'tech_safety', name: 'Ing. Patricia Flores (Seguridad)', role: 'Safety Specialist', phone: '+51966000005', device: 'dvc_pilot_safe_05' },
+    { id: 'tech_quality_spec', name: 'Ing. David Valdez Ochoa (Especialista Calidad)', role: 'Quality Specialist', phone: '+51966000001', device: 'dvc_pilot_qa_01', cip: null },
+    { id: 'tech_resident', name: 'Ing. Edison Cuadros Garcia (Residente de Obra)', role: 'Site Resident', phone: '+51966000002', device: 'dvc_pilot_res_02', cip: '302775' },
+    { id: 'tech_soils', name: 'Ing. Especialista en Suelos', role: 'Soils Specialist', phone: '+51966000003', device: 'dvc_pilot_soils_03', cip: null },
+    { id: 'tech_assistant_exec', name: 'Tec. Jorge Huamán (Asistente Calidad)', role: 'Assistant', phone: '+51966000004', device: 'dvc_pilot_asst_04', cip: null },
+    { id: 'tech_safety', name: 'Ing. Patricia Flores (Seguridad)', role: 'Safety Specialist', phone: '+51966000005', device: 'dvc_pilot_safe_05', cip: null },
     // Supervision Team
-    { id: 'tech_supervisor', name: 'Ing. Roberto Alarcón (Supervisor)', role: 'Supervisor', phone: '+51966000006', device: 'dvc_pilot_sup_06' },
-    { id: 'tech_structures', name: 'Ing. Luis Fernando Morales (Estructuras)', role: 'Structures Specialist', phone: '+51966000007', device: 'dvc_pilot_struct_07' },
-    { id: 'tech_assistant_sup', name: 'Tec. Juan Ramos (Asistente Supervisión)', role: 'Assistant', phone: '+51966000008', device: 'dvc_pilot_asst_08' }
+    { id: 'tech_supervisor', name: 'Ing. Teodoro Manuel Huamancusi Quispe (Supervisor)', role: 'Supervisor', phone: '+51966000006', device: 'dvc_pilot_sup_06', cip: '53548' },
+    { id: 'tech_structures', name: 'Ing. Roly Conocachi Huamani (Estructuras)', role: 'Structures Specialist', phone: '+51966000007', device: 'dvc_pilot_struct_07', cip: '76843' },
+    { id: 'tech_quality_sup', name: 'Ing. Cristian Manuel Torres Salinas (Calidad Supervisión)', role: 'Quality Specialist', phone: '+51966000009', device: 'dvc_pilot_qa_sup_09', cip: '260873' },
+    { id: 'tech_assistant_sup', name: 'Tec. Juan Ramos (Asistente Supervisión)', role: 'Assistant', phone: '+51966000008', device: 'dvc_pilot_asst_08', cip: null }
   ];
 
   for (const m of teamMembers) {
-    insertTech.run(m.id, config.pilotProjectId, m.name, defaultPinHash, m.device, m.phone, m.role);
+    insertTech.run(m.id, PILOT_PROJECT_ID, m.name, defaultPinHash, m.device, m.phone, m.role, m.cip || null);
   }
 
-  // 3. Seed Pilot Validation Criteria (Criteria as Data)
-  // Sourced strictly from Document v2.2 Section 9.3
+  // 3. Seed Pilot Validation Criteria (Sourced strictly from v2.4 Section 9.3)
   const insertCriterion = db.prepare(`
     INSERT OR REPLACE INTO criteria (id, project_id, activity, field, operator, min_value, max_value, expected_value, unit, source_reference, is_active)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -67,22 +80,22 @@ export function seedDatabase(db: DatabaseSync): void {
       activity: 'CONCRETE',
       field: 'slump_cm',
       operator: 'BETWEEN',
-      min_value: 7.6,  // 3 inches
-      max_value: 10.2, // 4 inches
+      min_value: 8.9,  // 3.5 inches (v2.4 confirmed 16 Sep 2026)
+      max_value: 12.7, // 5.0 inches (v2.4 confirmed 16 Sep 2026)
       expected_value: null,
       unit: 'cm',
-      source: 'Accredited Lab Mix Design Report (Plastic Consistency)'
+      source: 'Accredited Lab Mix Design / Quality Specialist Confirmed (8.9 - 12.7 cm)'
     },
     {
       id: 'crit_conc_cylinders',
       activity: 'CONCRETE',
       field: 'cylinders_cast',
       operator: 'GTE',
-      min_value: 2.0,
+      min_value: 4.0, // 4 cylinders per mixer truck (v2.4 confirmed 16 Sep 2026)
       max_value: null,
       expected_value: null,
-      unit: 'probetas',
-      source: 'EG-2013 (Minimum 2 per pour above 4 m³)'
+      unit: 'probetas/mixer',
+      source: 'EG-2013 / Quality Specialist Confirmed (4 probetas por mixer)'
     },
     {
       id: 'crit_conc_design_fc',
@@ -93,7 +106,7 @@ export function seedDatabase(db: DatabaseSync): void {
       max_value: null,
       expected_value: null,
       unit: 'kg/cm²',
-      source: 'Expediente Técnico Specifications'
+      source: 'Expediente Técnico Specifications (140 - 280 kg/cm²)'
     },
     // COMPACTION
     {
@@ -180,7 +193,7 @@ export function seedDatabase(db: DatabaseSync): void {
   for (const c of criteriaList) {
     insertCriterion.run(
       c.id,
-      config.pilotProjectId,
+      PILOT_PROJECT_ID,
       c.activity,
       c.field,
       c.operator,
@@ -199,7 +212,6 @@ export function seedDatabase(db: DatabaseSync): void {
     VALUES (?, ?, ?, ?, ?, ?, ?)
   `);
 
-  // An overdue scheduled pour from earlier today for testing R10
   const pastScheduledTime = new Date(Date.now() - 5 * 3600 * 1000).toISOString();
-  insertSchedule.run('sched_demo_01', config.pilotProjectId, 'CONCRETE', '14', '0+138', pastScheduledTime, null);
+  insertSchedule.run('sched_demo_01', PILOT_PROJECT_ID, 'CONCRETE', '14', '0+138', pastScheduledTime, null);
 }

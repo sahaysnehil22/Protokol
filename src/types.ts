@@ -153,3 +153,115 @@ export interface DossierResponse {
   open_nonconformances: number;
   completeness_pct: number;
 }
+
+export type SupportedLanguage = 'es' | 'en';
+
+export interface ProjectRecord {
+  id: string;
+  name: string;
+  contract_number: string;
+  entity: string;
+  execution_mode: string;
+  location?: string;
+  road_section?: string;
+  timezone: string;
+  timezone_offset: string;
+  whatsapp_recipients?: string;
+  sampling_basis: 'PER_TRUCK';
+  cylinders_per_truck: number;
+  default_design_fc: number;
+  metadata?: string;
+  created_at: string;
+  updated_at?: string;
+}
+
+export interface ProjectCreateRequest {
+  id: string;
+  name: string;
+  contract_number: string;
+  entity: string;
+  execution_mode: string;
+  location?: string;
+  road_section?: string;
+  timezone?: string;
+  timezone_offset?: string;
+  whatsapp_recipients?: string;
+  sampling_basis?: 'PER_TRUCK';
+  cylinders_per_truck?: number;
+  default_design_fc?: number;
+  criteria?: Array<{
+    activity: ActivityType;
+    field: string;
+    operator: 'BETWEEN' | 'GTE' | 'LTE' | 'EQ';
+    min_value?: number | null;
+    max_value?: number | null;
+    expected_value?: string | null;
+    unit?: string | null;
+    source_reference: string;
+    is_active?: number;
+  }>;
+  technicians?: Array<{
+    id?: string;
+    name: string;
+    role: string;
+    pin: string;
+    device_token?: string;
+    whatsapp?: string;
+    cip_number?: string;
+  }>;
+}
+
+export interface ConcreteTruckInput {
+  truck_number: number;
+  mixer_id: string;
+  delivery_note: string;
+  slump_cm: number;
+  cylinders_cast?: number;
+  design_fc?: number;
+  notes?: string;
+}
+
+export interface ConcreteTruckRecord {
+  id: string;
+  protocol_id: string;
+  truck_number: number;
+  mixer_id: string;
+  delivery_note: string;
+  slump_cm: number;
+  cylinders_cast: number;
+  design_fc: number;
+  slump_verdict: CheckResult;
+  notes?: string;
+  created_at: string;
+}
+
+export interface CylinderRecord {
+  id: string;
+  protocol_id: string;
+  truck_id?: string | null;
+  truck_number?: number | null;
+  specimen_number?: number | null;
+  cylinder_code: string;
+  cast_date: string;
+  test_date?: string | null;
+  age_days: number;
+  strength_kgcm2?: number | null;
+  design_fc: number;
+  lab?: string | null;
+  report_photo_id?: string | null;
+  status: CylinderStatus;
+  verdict?: CheckResult | null;
+  created_at: string;
+}
+
+export interface TechnicianRecord {
+  id: string;
+  project_id: string;
+  name: string;
+  pin_hash: string;
+  device_token: string;
+  whatsapp: string;
+  role: string;
+  cip_number?: string | null;
+  created_at: string;
+}

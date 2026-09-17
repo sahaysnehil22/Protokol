@@ -6,3 +6,10 @@ data/
 *.db-shm
 .DS_Store
 extracted_doc_v2_2.txt
+extracted_doc_v2_4.txt
+.env
+*.env
+*.log
+uploads/
+pdfs/
+dossiers/

@@ -87,6 +87,35 @@ export class NotificationService {
   }
 
   /**
+   * Resolves the configured WhatsApp recipient for a specific project.
+   */
+  getProjectRecipient(projectId: string): string {
+    try {
+      const proj = this.db.prepare(`
+        SELECT whatsapp_recipients FROM projects WHERE id = ?
+      `).get(projectId) as { whatsapp_recipients?: string } | undefined;
+
+      if (proj?.whatsapp_recipients && proj.whatsapp_recipients.trim().length > 0) {
+        // Return first recipient if comma-separated
+        return proj.whatsapp_recipients.split(',')[0].trim();
+      }
+
+      // Fallback to project's Quality Specialist
+      const qa = this.db.prepare(`
+        SELECT whatsapp FROM technicians WHERE project_id = ? AND role LIKE '%Quality%' LIMIT 1
+      `).get(projectId) as { whatsapp?: string } | undefined;
+
+      if (qa?.whatsapp && qa.whatsapp.trim().length > 0) {
+        return qa.whatsapp.trim();
+      }
+    } catch {
+      // ignore db errors on fallback
+    }
+
+    return config.whatsappFallbackRecipient;
+  }
+
+  /**
    * Dispatches an outbound notification and records it in the database.
    */
   async notify(payload: NotificationPayload): Promise<void> {
@@ -124,23 +153,26 @@ export class NotificationService {
     chainage: string;
     verdict: string;
     technicianName: string;
+    trucksCount?: number;
   }): Promise<void> {
     const verdictIcon = params.verdict === 'PASS' ? '✅ APROBADO' : params.verdict === 'PROVISIONAL_PASS' ? '⏳ APROBACIÓN PROVISIONAL' : '❌ NO CONFORME (FALLA)';
+    const truckDetail = params.trucksCount !== undefined && params.trucksCount > 1 ? `\n*Camiones Mixer:* ${params.trucksCount} unidades inspeccionadas` : '';
     const message = [
       `🚨 *PROTOKOL CALIDAD — NUEVO PROTOCOLO*`,
       `*Proyecto:* ${params.projectId}`,
       `*Actividad:* ${params.activity}`,
-      `*Progresiva:* ${params.chainage} | *Paño:* ${params.panel}`,
+      `*Progresiva:* ${params.chainage} | *Paño:* ${params.panel}${truckDetail}`,
       `*Protocolo:* ${params.protocolId}`,
       `*Estado:* ${verdictIcon}`,
       `*Registrado por:* ${params.technicianName}`,
-      `_Notificación automática para el Especialista de Calidad_`
+      `_Notificación automática para el Especialista de Calidad del Proyecto_`
     ].join('\n');
 
+    const recipient = this.getProjectRecipient(params.projectId);
     await this.notify({
       projectId: params.projectId,
       eventType: 'PROTOCOL_CREATED',
-      recipient: config.whatsappRecipient,
+      recipient,
       message,
       metadata: params
     });
@@ -155,34 +187,72 @@ export class NotificationService {
     nonconformanceId: string;
     field: string;
     expected: string;
-    actual: any;
+    actual: string;
     chainage: string;
     panel: string;
+    truckInfo?: string;
   }): Promise<void> {
+    const truckLine = params.truckInfo ? `*Camión / Mixer:* ${params.truckInfo}\n` : '';
     const message = [
-      `⚠️ *ALERTA URGENTE — NO CONFORMIDAD ABIERTA*`,
+      `⚠️ *PROTOKOL ALERTA — NO CONFORMIDAD ABIERTA*`,
       `*Proyecto:* ${params.projectId}`,
-      `*No Conformidad:* ${params.nonconformanceId}`,
-      `*Protocolo Origen:* ${params.protocolId}`,
+      `*No Conformidad ID:* ${params.nonconformanceId}`,
+      `*Protocolo Relacionado:* ${params.protocolId}`,
       `*Ubicación:* Progresiva ${params.chainage}, Paño ${params.panel}`,
-      `*Criterio Incumplido:* ${params.field}`,
-      `*Esperado:* ${params.expected}`,
-      `*Obtenido en Campo:* ${params.actual}`,
-      `*Acción:* Requiere revisión inmediata y registro de acción correctiva.`,
-      `_Plazo de notificación: < 60 segundos_`
+      `${truckLine}*Parámetro Fuera de Norma:* ${params.field}`,
+      `*Criterio Exigido:* ${params.expected}`,
+      `*Valor Obtenido:* ${params.actual}`,
+      `_Atención requerida: Se ha generado un registro formal de No Conformidad._`
     ].join('\n');
 
+    const recipient = this.getProjectRecipient(params.projectId);
     await this.notify({
       projectId: params.projectId,
       eventType: 'NC_OPENED',
-      recipient: config.whatsappRecipient,
+      recipient,
       message,
       metadata: params
     });
   }
 
   /**
-   * Helper: Formats and sends an overdue protocol notification (R10).
+   * Helper: Formats and sends a cylinder break laboratory result notification.
+   */
+  async notifyCylinderResult(params: {
+    projectId: string;
+    protocolId: string;
+    cylinderCode: string;
+    ageDays: number;
+    strengthKgcm2: number;
+    designFc: number;
+    verdict: 'PASS' | 'FAIL';
+    nonconformanceId?: string | null;
+  }): Promise<void> {
+    const statusText = params.verdict === 'PASS' 
+      ? `✅ CUMPLE f'c de diseño (${params.strengthKgcm2} >= ${params.designFc} kg/cm²)`
+      : `❌ NO CUMPLE f'c de diseño (${params.strengthKgcm2} < ${params.designFc} kg/cm²). Se ha abierto la No Conformidad ${params.nonconformanceId}.`;
+
+    const message = [
+      `🧪 *RESULTADO DE LABORATORIO — ROTURA DE TESTIGO*`,
+      `*Protocolo:* ${params.protocolId}`,
+      `*Código de Probeta:* ${params.cylinderCode}`,
+      `*Edad de Rotura:* ${params.ageDays} días`,
+      `*Resistencia Obtenida:* ${params.strengthKgcm2} kg/cm² (Diseño: ${params.designFc} kg/cm²)`,
+      `*Veredicto:* ${statusText}`
+    ].join('\n');
+
+    const recipient = this.getProjectRecipient(params.projectId);
+    await this.notify({
+      projectId: params.projectId,
+      eventType: 'CYLINDER_TESTED',
+      recipient,
+      message,
+      metadata: params
+    });
+  }
+
+  /**
+   * Helper: Formats and sends an overdue activity reminder (Requirement R10).
    */
   async notifyOverdueProtocol(params: {
     projectId: string;
@@ -202,47 +272,25 @@ export class NotificationService {
       `*Atención:* Verificar con el equipo de campo si se ejecutó el trabajo.`
     ].join('\n');
 
+    const recipient = this.getProjectRecipient(params.projectId);
     await this.notify({
       projectId: params.projectId,
       eventType: 'OVERDUE',
-      recipient: config.whatsappRecipient,
+      recipient,
       message,
       metadata: params
     });
   }
 
-  /**
-   * Helper: Formats and sends a cylinder lab test result alert.
-   */
-  async notifyCylinderResult(params: {
+  async notifyOverdueActivity(params: {
     projectId: string;
-    protocolId: string;
-    cylinderCode: string;
-    ageDays: number;
-    strengthKgcm2: number;
-    designFc: number;
-    verdict: string;
-    nonconformanceId?: string | null;
+    scheduleId: string;
+    activity: string;
+    chainage: string;
+    panel: string;
+    scheduledAt: string;
+    hoursOverdue: number;
   }): Promise<void> {
-    const statusText = params.verdict === 'PASS' 
-      ? `✅ Cumple f'c de diseño (${params.strengthKgcm2} ≥ ${params.designFc} kg/cm²)`
-      : `❌ NO CUMPLE f'c de diseño (${params.strengthKgcm2} < ${params.designFc} kg/cm²). Se ha abierto la No Conformidad ${params.nonconformanceId}.`;
-
-    const message = [
-      `🧪 *RESULTADO DE LABORATORIO — ROTURA DE TESTIGO*`,
-      `*Protocolo:* ${params.protocolId}`,
-      `*Código de Probeta:* ${params.cylinderCode}`,
-      `*Edad de Rotura:* ${params.ageDays} días`,
-      `*Resistencia Obtenida:* ${params.strengthKgcm2} kg/cm² (Diseño: ${params.designFc} kg/cm²)`,
-      `*Veredicto:* ${statusText}`
-    ].join('\n');
-
-    await this.notify({
-      projectId: params.projectId,
-      eventType: 'CYLINDER_TESTED',
-      recipient: config.whatsappRecipient,
-      message,
-      metadata: params
-    });
+    return this.notifyOverdueProtocol(params);
   }
 }

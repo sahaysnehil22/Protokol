@@ -15,23 +15,16 @@ export const config = {
   pdfDir: process.env.PDF_DIR || path.join(rootDir, 'data', 'pdfs'),
   dossierDir: process.env.DOSSIER_DIR || path.join(rootDir, 'data', 'dossiers'),
   
-  hmacSecret: process.env.HMAC_SECRET || 'protokol_ayacucho_pilot_hmac_secret_2026',
+  hmacSecret: process.env.HMAC_SECRET || 'protokol_hmac_secret_2026',
   
-  // Pilot Project Settings
-  pilotProjectId: 'AY-728-001',
-  pilotProjectName: 'Mejoramiento y Ampliación de Transitabilidad AY-728 a AY-729',
-  pilotContractNumber: 'N° 81-2026-GRA-SEDECENTRAL-OAPF',
-  pilotEntity: 'Gobierno Regional de Ayacucho',
-  pilotExecutionMode: 'Administración Directa',
-  
-  // WhatsApp Notification Settings
+  // WhatsApp Provider Settings (credentials from environment)
   whatsappChannel: process.env.WHATSAPP_CHANNEL || 'WHATSAPP_DEV',
-  whatsappRecipient: process.env.WHATSAPP_RECIPIENT || '+51966000000', // Especialista de Calidad
+  whatsappFallbackRecipient: process.env.WHATSAPP_RECIPIENT || '+51966000000',
   twilioAccountSid: process.env.TWILIO_ACCOUNT_SID || '',
   twilioAuthToken: process.env.TWILIO_AUTH_TOKEN || '',
   twilioFromNumber: process.env.TWILIO_FROM_NUMBER || '',
   
-  // Project Timezone
-  projectTimezoneOffset: '-05:00', // Peru Time (PET / UTC-5)
-  projectTimezoneName: 'America/Lima'
+  // Default regional timezone fallback
+  defaultTimezoneOffset: process.env.DEFAULT_TIMEZONE_OFFSET || '-05:00',
+  defaultTimezoneName: process.env.DEFAULT_TIMEZONE_NAME || 'America/Lima'
 };

@@ -9,7 +9,11 @@ import {
   DossierResponse,
   ProtocolRecord,
   ValidationCheck,
-  ProtocolVerdict
+  ProtocolVerdict,
+  ProjectRecord,
+  ConcreteTruckInput,
+  ConcreteTruckRecord,
+  SupportedLanguage
 } from '../types.js';
 import { ValidationService } from './validation.service.js';
 import { PhotoService } from './photo.service.js';
@@ -32,9 +36,9 @@ export class ProtocolService {
 
   /**
    * Submits and validates a quality protocol (Contract 8.1 POST /protocols).
-   * Persists immutable record and returns verdict within 5 seconds (Requirement R1).
+   * Supports 1 to 20+ mixer trucks for CONCRETE activities (v2.4 specification).
    */
-  async submitProtocol(request: ProtocolSubmissionRequest): Promise<ProtocolSubmissionResponse> {
+  async submitProtocol(request: ProtocolSubmissionRequest, lang: SupportedLanguage = 'es'): Promise<ProtocolSubmissionResponse> {
     // 1. Idempotency Check: Prevent duplicate offline sync submissions (Requirement R3)
     if (request.idempotency_key) {
       const existing = this.db.prepare(`
@@ -46,14 +50,22 @@ export class ProtocolService {
       }
     }
 
-    // 2. Identity Verification: Validate Technician PIN & Device
+    // 2. Validate Project Existence
+    const project = this.db.prepare(`
+      SELECT * FROM projects WHERE id = ?
+    `).get(request.project_id) as unknown as ProjectRecord | undefined;
+
+    if (!project) {
+      throw new Error(`PROJECT_NOT_FOUND: Proyecto ${request.project_id} no registrado en el sistema.`);
+    }
+
+    // 3. Identity Verification: Validate Technician PIN & Device for this Project
     const tech = this.db.prepare(`
       SELECT id, name, role, pin_hash, device_token
       FROM technicians
       WHERE project_id = ? AND (device_token = ? OR id = ?)
     `).get(request.project_id, request.device_token, request.device_token) as any;
 
-    // Fallback: If technician found by project and PIN matches
     let verifiedTech = tech;
     if (!verifiedTech) {
       const allProjectTechs = this.db.prepare(`
@@ -69,14 +81,44 @@ export class ProtocolService {
       throw new Error('AUTH_FAILED: Técnico no autorizado para este proyecto o PIN incorrecto.');
     }
 
-    // 3. Deterministic Validation against Database Criteria (Criteria as Data)
+    // 4. Normalize Multi-Truck Payload for Concrete
+    const measurements = { ...request.measurements };
+    let concreteTrucks: ConcreteTruckInput[] = [];
+
+    if (request.activity === 'CONCRETE') {
+      if (Array.isArray(measurements.trucks) && measurements.trucks.length > 0) {
+        concreteTrucks = measurements.trucks.map((t: any, idx: number) => ({
+          truck_number: t.truck_number || idx + 1,
+          mixer_id: String(t.mixer_id || `MIX-${String(idx + 1).padStart(2, '0')}`),
+          delivery_note: String(t.delivery_note || `GR-${String(idx + 1).padStart(3, '0')}`),
+          slump_cm: parseFloat(String(t.slump_cm)),
+          cylinders_cast: t.cylinders_cast !== undefined ? parseInt(String(t.cylinders_cast), 10) : project.cylinders_per_truck,
+          design_fc: t.design_fc !== undefined ? parseFloat(String(t.design_fc)) : (measurements.design_fc ? parseFloat(String(measurements.design_fc)) : project.default_design_fc),
+          notes: t.notes || ''
+        }));
+      } else if (measurements.slump_cm !== undefined) {
+        // Single truck backward-compatibility format
+        concreteTrucks = [{
+          truck_number: 1,
+          mixer_id: String(measurements.mixer_id || 'MIX-01'),
+          delivery_note: String(measurements.delivery_note || 'GR-001'),
+          slump_cm: parseFloat(String(measurements.slump_cm)),
+          cylinders_cast: measurements.cylinders_cast !== undefined ? parseInt(String(measurements.cylinders_cast), 10) : project.cylinders_per_truck,
+          design_fc: measurements.design_fc !== undefined ? parseFloat(String(measurements.design_fc)) : project.default_design_fc,
+          notes: measurements.notes || ''
+        }];
+      }
+      measurements.trucks = concreteTrucks;
+    }
+
+    // 5. Deterministic Validation against Database Criteria (Criteria as Data)
     const valResult = this.validationService.validateMeasurements(
       request.project_id,
       request.activity,
-      request.measurements
+      measurements
     );
 
-    // 4. Determine Verdict according to Domain State Machine
+    // 6. Determine Verdict according to Domain State Machine
     let verdict: ProtocolVerdict;
     if (!valResult.allPassed) {
       verdict = 'FAIL';
@@ -86,20 +128,20 @@ export class ProtocolService {
       verdict = 'PASS';
     }
 
-    // 5. Timestamps: Client recorded_at with offset + Server received time (Requirement R6)
+    // 7. Timestamps: Client recorded_at with offset + Server received time (Requirement R6)
     const serverReceivedAt = new Date().toISOString();
     const recordedAt = request.recorded_at || serverReceivedAt;
     const timezoneOffset = request.recorded_at && request.recorded_at.includes('-')
       ? request.recorded_at.slice(-6)
-      : config.projectTimezoneOffset;
+      : (project.timezone_offset || config.defaultTimezoneOffset);
 
-    // 6. Generate Unique Protocol ID: PRT-YYYYMMDD-HHMM-PANEL
+    // 8. Generate Unique Protocol ID: PRT-YYYYMMDD-HHMM-PANEL
     const datePart = recordedAt.split('T')[0].replace(/-/g, '');
     const timePart = (recordedAt.split('T')[1] || '00:00').substring(0, 5).replace(':', '');
     const panelPadded = request.panel.padStart(3, '0');
     const protocolId = `PRT-${datePart}-${timePart}-${panelPadded}`;
 
-    // 7. Calculate Cryptographic Integrity Hash (Requirement ADR-003)
+    // 9. Calculate Cryptographic Integrity Hash (ADR-003)
     const integrityHash = computeProtocolIntegrityHash({
       protocol_id: protocolId,
       project_id: request.project_id,
@@ -109,12 +151,12 @@ export class ProtocolService {
       gps_lng: request.gps.lng,
       panel: request.panel,
       chainage: request.chainage,
-      measurements: request.measurements,
+      measurements,
       technician_id: verifiedTech.id,
       device_token: request.device_token
     });
 
-    // 8. Insert Immutable Protocol Record
+    // 10. Insert Immutable Protocol Record
     const insertProtocol = this.db.prepare(`
       INSERT INTO protocols (
         id, project_id, activity, recorded_at, server_received_at, timezone_offset,
@@ -134,7 +176,7 @@ export class ProtocolService {
       request.gps.lng,
       request.panel,
       request.chainage,
-      JSON.stringify(request.measurements),
+      JSON.stringify(measurements),
       verdict,
       verifiedTech.id,
       request.device_token,
@@ -143,26 +185,108 @@ export class ProtocolService {
       request.idempotency_key || null
     );
 
-    // 9. Associate Evidence Photos (Opaque References)
+    // 11. Concrete Normalized Relational Storage (Trucks & Cylinders)
+    const pending: string[] = [];
+    const truckRecordMap = new Map<number, string>(); // truck_number -> truck_id
+
+    if (request.activity === 'CONCRETE') {
+      const castDate = recordedAt.split('T')[0];
+      const slumpCrit = this.validationService.getCriteria(request.project_id, 'CONCRETE').find(c => c.field === 'slump_cm');
+
+      const insertTruck = this.db.prepare(`
+        INSERT INTO concrete_trucks (
+          id, protocol_id, truck_number, mixer_id, delivery_note, slump_cm,
+          cylinders_cast, design_fc, slump_verdict, notes
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `);
+
+      const insertCyl = this.db.prepare(`
+        INSERT INTO cylinders (
+          id, protocol_id, truck_id, truck_number, specimen_number,
+          cylinder_code, cast_date, age_days, design_fc, status
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'PENDING')
+      `);
+
+      for (const truck of concreteTrucks) {
+        const truckId = `trk_${protocolId}_T${truck.truck_number}`;
+        truckRecordMap.set(truck.truck_number, truckId);
+
+        // Independent truck slump evaluation
+        const isSlumpPass = slumpCrit
+          ? this.validationService.evaluateCriterion(slumpCrit, truck.slump_cm)
+          : true;
+
+        const truckCylinders = truck.cylinders_cast !== undefined ? truck.cylinders_cast : (project.cylinders_per_truck || 4);
+        const truckDesignFc = truck.design_fc !== undefined ? truck.design_fc : (project.default_design_fc || 210);
+
+        insertTruck.run(
+          truckId,
+          protocolId,
+          truck.truck_number,
+          truck.mixer_id,
+          truck.delivery_note,
+          truck.slump_cm,
+          truckCylinders,
+          truckDesignFc,
+          isSlumpPass ? 'PASS' : 'FAIL',
+          truck.notes || ''
+        );
+
+        // Schedule individual cylinders for this truck
+        for (let c = 1; c <= truckCylinders; c++) {
+          // Typically 7D for early breaks (specimens 1-2 for a 4-set) and 28D for contractual gate (specimens 3-4)
+          const is7Day = c <= Math.max(1, Math.floor(truckCylinders / 2));
+          const ageDays = is7Day ? 7 : 28;
+          const cylId = `cyl_${protocolId}_T${truck.truck_number}_C${c}`;
+          const cylCode = `P-${datePart}-${panelPadded}-T${truck.truck_number}-C${c}`;
+
+          insertCyl.run(
+            cylId,
+            protocolId,
+            truckId,
+            truck.truck_number,
+            c,
+            cylCode,
+            castDate,
+            ageDays,
+            truckDesignFc
+          );
+        }
+      }
+
+      pending.push('CYLINDER_7D', 'CYLINDER_28D');
+    }
+
+    // 12. Associate Evidence Photos (Opaque References)
     if (request.photo_ids && request.photo_ids.length > 0) {
       this.photoService.linkPhotosToProtocol(protocolId, request.photo_ids);
     }
 
-    // 10. Non-Conformance Handling on Failure (Requirement R2)
-    let nonconformanceId: string | null = null;
+    // 13. Non-Conformance Handling on Failure (Requirement R2)
+    let primaryNonconformanceId: string | null = null;
     if (verdict === 'FAIL') {
       for (const failedCheck of valResult.failedChecks) {
-        nonconformanceId = `NC-${datePart}-${timePart}-${Math.floor(1000 + Math.random() * 9000)}`;
-        
+        const ncId = `NC-${datePart}-${timePart}-${Math.floor(1000 + Math.random() * 9000)}`;
+        if (!primaryNonconformanceId) primaryNonconformanceId = ncId;
+
+        // Extract truck number if present in field description
+        let linkedTruckId: string | null = null;
+        const truckMatch = failedCheck.field.match(/Camión\s+(\d+)/);
+        if (truckMatch && truckMatch[1]) {
+          const tNum = parseInt(truckMatch[1], 10);
+          linkedTruckId = truckRecordMap.get(tNum) || null;
+        }
+
         const insertNc = this.db.prepare(`
           INSERT INTO nonconformances (
-            id, protocol_id, field, expected_value, actual_value, description, status
-          ) VALUES (?, ?, ?, ?, ?, ?, 'OPEN')
+            id, protocol_id, truck_id, field, expected_value, actual_value, description, status
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, 'OPEN')
         `);
 
         insertNc.run(
-          nonconformanceId,
+          ncId,
           protocolId,
+          linkedTruckId,
           failedCheck.field,
           failedCheck.expected,
           String(failedCheck.actual),
@@ -173,42 +297,18 @@ export class ProtocolService {
         await this.notificationService.notifyNonConformanceOpened({
           projectId: request.project_id,
           protocolId,
-          nonconformanceId,
+          nonconformanceId: ncId,
           field: failedCheck.field,
           expected: failedCheck.expected,
-          actual: failedCheck.actual,
+          actual: String(failedCheck.actual),
           chainage: request.chainage,
-          panel: request.panel
+          panel: request.panel,
+          truckInfo: failedCheck.source_reference
         });
       }
     }
 
-    // 11. Concrete Workflow: Schedule Pending Cylinders (Requirement R4)
-    const pending: string[] = [];
-    if (request.activity === 'CONCRETE') {
-      const cylindersCast = parseInt(String(request.measurements.cylinders_cast || '2'), 10);
-      const designFc = parseFloat(String(request.measurements.design_fc || '210'));
-      const castDate = recordedAt.split('T')[0];
-
-      const insertCyl = this.db.prepare(`
-        INSERT INTO cylinders (id, protocol_id, cylinder_code, cast_date, age_days, design_fc, status)
-        VALUES (?, ?, ?, ?, ?, ?, 'PENDING')
-      `);
-
-      // 7-day break specimen
-      const cyl7Id = `cyl_7d_${protocolId}`;
-      const code7 = `P-${datePart}-${panelPadded}-7D`;
-      insertCyl.run(cyl7Id, protocolId, code7, castDate, 7, designFc);
-      pending.push('CYLINDER_7D');
-
-      // 28-day break specimen (binding compliance gate)
-      const cyl28Id = `cyl_28d_${protocolId}`;
-      const code28 = `P-${datePart}-${panelPadded}-28D`;
-      insertCyl.run(cyl28Id, protocolId, code28, castDate, 28, designFc);
-      pending.push('CYLINDER_28D');
-    }
-
-    // 12. Dispatch Protocol Creation Alert to Quality Specialist
+    // 14. Dispatch Protocol Creation Alert to Project Recipient
     await this.notificationService.notifyProtocolCreated({
       projectId: request.project_id,
       protocolId,
@@ -216,24 +316,26 @@ export class ProtocolService {
       panel: request.panel,
       chainage: request.chainage,
       verdict,
-      technicianName: verifiedTech.name
+      technicianName: verifiedTech.name,
+      trucksCount: concreteTrucks.length
     });
 
-    // 13. Generate Protocol PDF (Requirement R8)
+    // 15. Generate Protocol PDF (Requirement R8)
     const protocolRecord = this.getProtocolById(protocolId)!;
     await this.pdfService.generateProtocolPdf({
       protocol: protocolRecord,
       checks: valResult.checks,
       technicianName: verifiedTech.name,
       technicianRole: verifiedTech.role,
-      nonconformanceId
+      nonconformanceId: primaryNonconformanceId,
+      lang
     });
 
     return {
       protocol_id: protocolId,
       verdict,
       checks: valResult.checks,
-      nonconformance_id: nonconformanceId,
+      nonconformance_id: primaryNonconformanceId,
       pdf_url: `/api/protocols/${protocolId}/pdf`,
       pending
     };
@@ -241,9 +343,9 @@ export class ProtocolService {
 
   /**
    * Records a deferred concrete cylinder compressive strength test (Contract 8.2).
-   * Transitions PROVISIONAL_PASS -> PASS (if strength >= design_fc) or FAIL (if strength < design_fc).
+   * Transitions PROVISIONAL_PASS -> PASS only when ALL 28-day cylinders across all trucks pass design f'c.
    */
-  async recordCylinderResult(protocolId: string, result: CylinderResultRequest): Promise<CylinderResultResponse> {
+  async recordCylinderResult(protocolId: string, result: CylinderResultRequest, lang: SupportedLanguage = 'es'): Promise<CylinderResultResponse> {
     const protocol = this.getProtocolById(protocolId);
     if (!protocol) {
       throw new Error(`PROTOCOL_NOT_FOUND: Protocolo ${protocolId} no encontrado.`);
@@ -253,72 +355,96 @@ export class ProtocolService {
       throw new Error(`INVALID_ACTIVITY: Solo protocolos de CONCRETO admiten rotura de probetas.`);
     }
 
-    // Locate pending cylinder for this age
-    const cylinder = this.db.prepare(`
+    // Locate target cylinder: by code if provided, otherwise first pending matching age_days
+    let cylinder = this.db.prepare(`
       SELECT * FROM cylinders
-      WHERE protocol_id = ? AND age_days = ?
-    `).get(protocolId, result.age_days) as any;
+      WHERE protocol_id = ? AND cylinder_code = ?
+    `).get(protocolId, result.cylinder_code) as any;
 
-    const designFc = cylinder ? cylinder.design_fc : (protocol.measurements.design_fc || 210);
+    if (!cylinder) {
+      cylinder = this.db.prepare(`
+        SELECT * FROM cylinders
+        WHERE protocol_id = ? AND age_days = ? AND status = 'PENDING'
+        ORDER BY truck_number ASC, specimen_number ASC
+        LIMIT 1
+      `).get(protocolId, result.age_days) as any;
+    }
+
+    if (!cylinder) {
+      throw new Error(`CYLINDER_NOT_FOUND: No se encontró probeta pendiente para edad ${result.age_days}d en protocolo ${protocolId}.`);
+    }
+
+    const designFc = cylinder.design_fc || 210;
     const passed = result.strength_kgcm2 >= designFc;
     const testDate = new Date().toISOString().split('T')[0];
 
     // Update cylinder record
-    const updateCyl = this.db.prepare(`
+    this.db.prepare(`
       UPDATE cylinders
       SET strength_kgcm2 = ?, lab = ?, report_photo_id = ?, test_date = ?, status = 'TESTED', verdict = ?
-      WHERE protocol_id = ? AND age_days = ?
-    `);
-
-    updateCyl.run(
+      WHERE id = ?
+    `).run(
       result.strength_kgcm2,
       result.lab,
       result.report_photo_id || null,
       testDate,
       passed ? 'PASS' : 'FAIL',
-      protocolId,
-      result.age_days
+      cylinder.id
     );
 
     let newProtocolVerdict: ProtocolVerdict = protocol.verdict;
     let nonconformanceId: string | null = null;
 
-    // At 28 days (contractual compliance gate)
+    // Evaluate 28-day break rules (the contractual compliance gate)
     if (result.age_days === 28) {
-      if (passed) {
-        newProtocolVerdict = 'PASS';
-      } else {
-        // Requirement R5: cylinder strength below design f'c results in FAIL and NC
+      if (!passed) {
+        // Requirement R5: ANY 28-day cylinder below design f'c causes FAIL and opens NC
         newProtocolVerdict = 'FAIL';
         const datePart = new Date().toISOString().split('T')[0].replace(/-/g, '');
         nonconformanceId = `NC-LAB-${datePart}-${Math.floor(1000 + Math.random() * 9000)}`;
 
         this.db.prepare(`
           INSERT INTO nonconformances (
-            id, protocol_id, field, expected_value, actual_value, description, status
-          ) VALUES (?, ?, 'strength_kgcm2', ?, ?, ?, 'OPEN')
+            id, protocol_id, truck_id, field, expected_value, actual_value, description, status
+          ) VALUES (?, ?, ?, 'strength_kgcm2', ?, ?, ?, 'OPEN')
         `).run(
           nonconformanceId,
           protocolId,
+          cylinder.truck_id || null,
           `>= ${designFc} kg/cm²`,
           `${result.strength_kgcm2} kg/cm²`,
-          `Resistencia a compresión a 28 días (${result.strength_kgcm2} kg/cm²) inferior a f'c de diseño (${designFc} kg/cm²)`
+          `Resistencia a 28 días (${result.strength_kgcm2} kg/cm²) inferior a f'c (${designFc} kg/cm²) para probeta ${cylinder.cylinder_code}`
         );
-      }
 
-      // Update protocol verdict (explicitly permitted by trigger when OLD.verdict = 'PROVISIONAL_PASS')
-      this.db.prepare(`
-        UPDATE protocols
-        SET verdict = ?
-        WHERE id = ?
-      `).run(newProtocolVerdict, protocolId);
+        this.db.prepare(`
+          UPDATE protocols SET verdict = 'FAIL' WHERE id = ?
+        `).run(protocolId);
+      } else {
+        // Check if ALL 28-day cylinders across all trucks are tested and passing
+        const pending28d = this.db.prepare(`
+          SELECT count(*) as count FROM cylinders
+          WHERE protocol_id = ? AND age_days = 28 AND status = 'PENDING'
+        `).get(protocolId) as { count: number };
+
+        const failed28d = this.db.prepare(`
+          SELECT count(*) as count FROM cylinders
+          WHERE protocol_id = ? AND age_days = 28 AND verdict = 'FAIL'
+        `).get(protocolId) as { count: number };
+
+        if (pending28d.count === 0 && failed28d.count === 0) {
+          newProtocolVerdict = 'PASS';
+          this.db.prepare(`
+            UPDATE protocols SET verdict = 'PASS' WHERE id = ?
+          `).run(protocolId);
+        }
+      }
     }
 
     // Send WhatsApp notification for cylinder test result
     await this.notificationService.notifyCylinderResult({
       projectId: protocol.project_id,
       protocolId,
-      cylinderCode: result.cylinder_code,
+      cylinderCode: cylinder.cylinder_code,
       ageDays: result.age_days,
       strengthKgcm2: result.strength_kgcm2,
       designFc,
@@ -326,31 +452,22 @@ export class ProtocolService {
       nonconformanceId
     });
 
-    // Re-generate updated protocol PDF with final verdict
+    // Re-generate updated protocol PDF with latest verdict and cylinder breakdown
     const tech = this.db.prepare(`SELECT name, role FROM technicians WHERE id = ?`).get(protocol.technician_id) as any;
-    const checks = this.validationService.validateMeasurements(protocol.project_id, protocol.activity, protocol.measurements).checks;
+    const val = this.validationService.validateMeasurements(protocol.project_id, protocol.activity, protocol.measurements);
     
-    // Append cylinder check
-    checks.push({
-      field: `strength_kgcm2_${result.age_days}d`,
-      expected: `>= ${designFc} kg/cm²`,
-      actual: result.strength_kgcm2,
-      result: passed ? 'PASS' : 'FAIL',
-      unit: 'kg/cm²',
-      source_reference: `Ensayo de Rotura Lab ${result.lab} (${result.age_days} días)`
-    });
-
     await this.pdfService.generateProtocolPdf({
       protocol: { ...protocol, verdict: newProtocolVerdict },
-      checks,
+      checks: val.checks,
       technicianName: tech ? tech.name : 'Responsable de Campo',
       technicianRole: tech ? tech.role : 'Especialista',
-      nonconformanceId
+      nonconformanceId,
+      lang
     });
 
     return {
       protocol_id: protocolId,
-      cylinder_code: result.cylinder_code,
+      cylinder_code: cylinder.cylinder_code,
       age_days: result.age_days,
       strength_kgcm2: result.strength_kgcm2,
       design_fc: designFc,
@@ -382,7 +499,7 @@ export class ProtocolService {
       else if (p.verdict === 'FAIL') failedCount++;
 
       const pendingCylinders = this.db.prepare(`
-        SELECT age_days FROM cylinders WHERE protocol_id = ? AND status = 'PENDING'
+        SELECT DISTINCT age_days FROM cylinders WHERE protocol_id = ? AND status = 'PENDING'
       `).all(p.id) as Array<{ age_days: number }>;
 
       return {
@@ -410,12 +527,11 @@ export class ProtocolService {
       WHERE p.project_id = ? AND nc.status = 'OPEN'
     `).get(projectId) as { count: number };
 
-    // Expected protocols based on scheduled activities
     const schedulesCount = this.db.prepare(`
       SELECT count(*) as count FROM protocol_schedules WHERE project_id = ?
     `).get(projectId) as { count: number };
 
-    const totalExpected = Math.max(protocols.length, schedulesCount.count, 84);
+    const totalExpected = Math.max(protocols.length, schedulesCount.count, 10);
     const missingCount = Math.max(0, totalExpected - protocols.length);
 
     return {
@@ -440,7 +556,6 @@ export class ProtocolService {
   async getProjectDossier(projectId: string): Promise<DossierResponse> {
     const result = await this.pdfService.generateDossierPdf(projectId);
     
-    // Completeness is calculated as (passed protocols / total expected)
     const status = this.getProjectStatus(projectId);
     const completenessPct = status.summary.total_expected > 0
       ? Number(((status.summary.passed / status.summary.total_expected) * 100).toFixed(1))
@@ -482,7 +597,7 @@ export class ProtocolService {
     `).get(protocol.id) as { id: string } | undefined;
 
     const pendingCyl = this.db.prepare(`
-      SELECT age_days FROM cylinders WHERE protocol_id = ? AND status = 'PENDING'
+      SELECT DISTINCT age_days FROM cylinders WHERE protocol_id = ? AND status = 'PENDING'
     `).all(protocol.id) as Array<{ age_days: number }>;
 
     return {

@@ -1,18 +1,19 @@
 // PROTOKOL — View: Immediate Verdict Display
+import { t } from '../i18n.js';
 
 export function renderVerdictView(container, result, onNewProtocol, onOpenStatusView) {
   let verdictClass = 'badge-pass';
-  let verdictTitle = 'CONFORME / LIBERADO';
+  let verdictTitle = t('verdict.pass_title');
   let verdictDesc = 'La actividad cumple con todos los criterios técnicos del Expediente y la norma EG-2013.';
 
   if (result.verdict === 'PROVISIONAL_PASS') {
     verdictClass = 'badge-provisional';
-    verdictTitle = 'APROBACIÓN PROVISIONAL';
-    verdictDesc = 'Vaciado conforme en llegada. El protocolo queda pendiente hasta los ensayos de rotura de probetas (28 días).';
+    verdictTitle = t('verdict.provisional_title');
+    verdictDesc = t('verdict.provisional_desc');
   } else if (result.verdict === 'FAIL') {
     verdictClass = 'badge-fail';
-    verdictTitle = 'NO CONFORME (FALLA)';
-    verdictDesc = `Se ha abierto automáticamente la No Conformidad ${result.nonconformance_id || 'NC'}. Notificación enviada al Especialista de Calidad.`;
+    verdictTitle = t('verdict.fail_title');
+    verdictDesc = t('verdict.fail_desc');
   }
 
   container.innerHTML = `
@@ -39,7 +40,7 @@ export function renderVerdictView(container, result, onNewProtocol, onOpenStatus
       ${result.pdf_url ? `
         <div style="margin-bottom: 18px;">
           <a href="${result.pdf_url}" target="_blank" class="btn btn-primary" style="font-size: 15px;">
-            📄 Descargar Protocolo Oficial (PDF)
+            ${t('verdict.pdf_btn')}
           </a>
         </div>
       ` : ''}
@@ -76,18 +77,18 @@ export function renderVerdictView(container, result, onNewProtocol, onOpenStatus
             ⏳ Tareas Pendientes Programadas:
           </div>
           <ul style="font-size: 12px; color: #78350F; padding-left: 18px; line-height: 1.6;">
-            <li>Rotura de probeta a 7 días (Alerta temprana de resistencia).</li>
-            <li>Rotura de probeta a 28 días (Liberación contractual de f'c ≥ 210 kg/cm²).</li>
+            <li>Rotura de probetas a 7 días (Alerta temprana).</li>
+            <li>Rotura de probetas a 28 días (Liberación contractual de f'c).</li>
           </ul>
         </div>
       ` : ''}
 
       <div style="display: flex; gap: 10px; margin-top: 24px;">
         <button id="btn-new-activity" class="btn btn-secondary" style="flex: 1; font-size: 14px;">
-          + Nueva Actividad
+          + ${t('verdict.new_protocol')}
         </button>
         <button id="btn-view-status" class="btn btn-outline" style="flex: 1; font-size: 14px;">
-          📊 Ver Estado General
+          📊 ${t('verdict.status_view')}
         </button>
       </div>
     </div>

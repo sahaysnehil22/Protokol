@@ -1,12 +1,14 @@
 // PROTOKOL — Main Application Orchestrator
-import { openLocalDB, getConfigItem, getPendingSubmissions } from './db.js';
+import { openLocalDB, getConfigItem } from './db.js';
 import { initAutoSync, onSyncStateChange } from './sync.js';
+import { getLanguage, setLanguage, onLanguageChange, t } from './i18n.js';
 import { renderIdentifyView } from './views/identify.js';
 import { renderHomeView } from './views/home.js';
 import { renderProtocolFormView } from './views/protocol_form.js';
 import { renderVerdictView } from './views/verdict.js';
 import { renderQueueDrawer } from './views/queue.js';
 import { renderStatusView } from './views/status_view.js';
+import { renderProjectSetupView } from './views/project_setup.js';
 
 class App {
   constructor() {
@@ -15,9 +17,11 @@ class App {
     this.statusText = document.getElementById('status-text');
     this.drawerContainer = document.getElementById('queue-drawer');
     this.drawerPanel = document.getElementById('queue-drawer-panel');
+    this.langToggleBtn = document.getElementById('btn-lang-toggle');
 
     this.session = null;
     this.currentView = 'identify';
+    this.currentParams = {};
     this.lastSubmissionResult = null;
   }
 
@@ -42,7 +46,10 @@ class App {
     // 4. Bind network status & queue drawer
     this.bindNetworkStatus();
 
-    // 5. Check existing session
+    // 5. Bind Language Switcher
+    this.bindLanguageSwitcher();
+
+    // 6. Check existing session
     const savedSession = await getConfigItem('session');
     if (savedSession) {
       this.session = savedSession;
@@ -52,14 +59,34 @@ class App {
     }
   }
 
+  bindLanguageSwitcher() {
+    if (!this.langToggleBtn) return;
+
+    const updateBtnText = (lang) => {
+      this.langToggleBtn.innerText = lang === 'es' ? 'EN' : 'ES';
+    };
+
+    updateBtnText(getLanguage());
+
+    this.langToggleBtn.addEventListener('click', () => {
+      const nextLang = getLanguage() === 'es' ? 'en' : 'es';
+      setLanguage(nextLang);
+      updateBtnText(nextLang);
+    });
+
+    onLanguageChange(() => {
+      this.navigateTo(this.currentView, this.currentParams);
+    });
+  }
+
   bindNetworkStatus() {
     const updateNetworkUI = (isOnline) => {
       if (isOnline) {
         this.statusPill.classList.remove('offline');
-        this.statusText.innerText = 'ONLINE';
+        this.statusText.innerText = t('nav.online');
       } else {
         this.statusPill.classList.add('offline');
-        this.statusText.innerText = 'OFFLINE';
+        this.statusText.innerText = t('nav.offline');
       }
     };
 
@@ -70,11 +97,11 @@ class App {
     onSyncStateChange((state) => {
       if (state.isSyncing) {
         this.statusPill.classList.add('syncing');
-        this.statusText.innerText = `SYNC (${state.pendingCount})`;
+        this.statusText.innerText = `${t('nav.syncing')} (${state.pendingCount})`;
       } else {
         this.statusPill.classList.remove('syncing');
         if (state.pendingCount > 0) {
-          this.statusText.innerText = `${state.pendingCount} EN COLA`;
+          this.statusText.innerText = t('nav.queued', { count: state.pendingCount });
         } else {
           updateNetworkUI(navigator.onLine);
         }
@@ -95,14 +122,32 @@ class App {
 
   navigateTo(viewName, params = {}) {
     this.currentView = viewName;
+    this.currentParams = params;
     this.mainContainer.innerHTML = '';
 
     switch (viewName) {
       case 'identify':
-        renderIdentifyView(this.mainContainer, (session) => {
-          this.session = session;
-          this.navigateTo('home');
-        });
+        renderIdentifyView(
+          this.mainContainer,
+          (session) => {
+            this.session = session;
+            this.navigateTo('home');
+          },
+          () => this.navigateTo('setup')
+        );
+        break;
+
+      case 'setup':
+        renderProjectSetupView(
+          this.mainContainer,
+          (createdProject) => {
+            this.navigateTo('identify');
+          },
+          () => {
+            if (this.session) this.navigateTo('home');
+            else this.navigateTo('identify');
+          }
+        );
         break;
 
       case 'home':
@@ -110,7 +155,8 @@ class App {
           this.mainContainer,
           this.session,
           (activity) => this.navigateTo('form', { activity }),
-          () => this.navigateTo('status')
+          () => this.navigateTo('status'),
+          () => this.navigateTo('setup')
         );
         break;
 

@@ -1,5 +1,5 @@
 import { DatabaseSync } from 'node:sqlite';
-import { CriterionRecord, ValidationCheck, ActivityType } from '../types.js';
+import { CriterionRecord, ValidationCheck, ActivityType, ConcreteTruckInput } from '../types.js';
 
 export interface ValidationEvaluationResult {
   checks: ValidationCheck[];
@@ -24,6 +24,7 @@ export class ValidationService {
 
   /**
    * Validates submitted measurements against the project's criteria.
+   * Supports both standard measurements and multi-truck concrete pour validation.
    */
   validateMeasurements(
     projectId: string,
@@ -34,10 +35,101 @@ export class ValidationService {
     const checks: ValidationCheck[] = [];
     const failedChecks: ValidationCheck[] = [];
 
+    // Special handling for multi-truck concrete pours
+    if (activity === 'CONCRETE' && Array.isArray(measurements.trucks) && measurements.trucks.length > 0) {
+      const slumpCrit = criteria.find(c => c.field === 'slump_cm');
+      const cylindersCrit = criteria.find(c => c.field === 'cylinders_cast');
+      const formworkCrit = criteria.find(c => c.field === 'formwork_approved');
+
+      // 1. Validate Formwork pre-pour checklist if criterion exists
+      if (formworkCrit) {
+        const actualVal = measurements.formwork_approved;
+        if (actualVal === undefined || actualVal === null) {
+          const check: ValidationCheck = {
+            field: formworkCrit.field,
+            expected: this.formatExpected(formworkCrit),
+            actual: 'MISSING',
+            result: 'FAIL',
+            unit: formworkCrit.unit || undefined,
+            source_reference: formworkCrit.source_reference
+          };
+          checks.push(check);
+          failedChecks.push(check);
+        } else {
+          const passed = this.evaluateCriterion(formworkCrit, actualVal);
+          const check: ValidationCheck = {
+            field: formworkCrit.field,
+            expected: this.formatExpected(formworkCrit),
+            actual: actualVal,
+            result: passed ? 'PASS' : 'FAIL',
+            unit: formworkCrit.unit || undefined,
+            source_reference: formworkCrit.source_reference
+          };
+          checks.push(check);
+          if (!passed) failedChecks.push(check);
+        }
+      }
+
+      // 2. Validate each truck independently
+      const trucks: ConcreteTruckInput[] = measurements.trucks;
+      for (const truck of trucks) {
+        const truckLabel = `Mixer ${truck.mixer_id} (Guía ${truck.delivery_note})`;
+
+        // Validate Slump
+        if (slumpCrit) {
+          if (truck.slump_cm === undefined || truck.slump_cm === null || isNaN(Number(truck.slump_cm))) {
+            const check: ValidationCheck = {
+              field: `slump_cm [Camión ${truck.truck_number}: ${truckLabel}]`,
+              expected: this.formatExpected(slumpCrit),
+              actual: 'MISSING',
+              result: 'FAIL',
+              unit: slumpCrit.unit || 'cm',
+              source_reference: slumpCrit.source_reference
+            };
+            checks.push(check);
+            failedChecks.push(check);
+          } else {
+            const passed = this.evaluateCriterion(slumpCrit, truck.slump_cm);
+            const check: ValidationCheck = {
+              field: `slump_cm [Camión ${truck.truck_number}: ${truckLabel}]`,
+              expected: this.formatExpected(slumpCrit),
+              actual: truck.slump_cm,
+              result: passed ? 'PASS' : 'FAIL',
+              unit: slumpCrit.unit || 'cm',
+              source_reference: slumpCrit.source_reference
+            };
+            checks.push(check);
+            if (!passed) failedChecks.push(check);
+          }
+        }
+
+        // Validate Cylinders Cast per truck if criterion exists
+        if (cylindersCrit && truck.cylinders_cast !== undefined) {
+          const passed = this.evaluateCriterion(cylindersCrit, truck.cylinders_cast);
+          const check: ValidationCheck = {
+            field: `cylinders_cast [Camión ${truck.truck_number}: ${truckLabel}]`,
+            expected: this.formatExpected(cylindersCrit),
+            actual: truck.cylinders_cast,
+            result: passed ? 'PASS' : 'FAIL',
+            unit: cylindersCrit.unit || 'probetas',
+            source_reference: cylindersCrit.source_reference
+          };
+          checks.push(check);
+          if (!passed) failedChecks.push(check);
+        }
+      }
+
+      return {
+        checks,
+        allPassed: failedChecks.length === 0,
+        failedChecks
+      };
+    }
+
+    // Standard field-by-field evaluation (for non-concrete or legacy single-truck payloads)
     for (const crit of criteria) {
       const actualValue = measurements[crit.field];
-      
-      // If a configured field is missing from measurements, it fails validation
+
       if (actualValue === undefined || actualValue === null) {
         const check: ValidationCheck = {
           field: crit.field,
@@ -78,7 +170,7 @@ export class ValidationService {
   /**
    * Evaluates a single criterion rule deterministically.
    */
-  private evaluateCriterion(crit: CriterionRecord, actualValue: any): boolean {
+  evaluateCriterion(crit: CriterionRecord, actualValue: any): boolean {
     const numActual = typeof actualValue === 'number' ? actualValue : parseFloat(actualValue);
 
     switch (crit.operator) {
@@ -114,7 +206,7 @@ export class ValidationService {
   /**
    * Formats the expected criterion range or value for display and PDF certificates.
    */
-  private formatExpected(crit: CriterionRecord): string {
+  formatExpected(crit: CriterionRecord): string {
     switch (crit.operator) {
       case 'BETWEEN':
         return `${crit.min_value} - ${crit.max_value}${crit.unit ? ' ' + crit.unit : ''}`;

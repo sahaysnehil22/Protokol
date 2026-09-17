@@ -1,6 +1,7 @@
 // PROTOKOL — View: Offline Queue Drawer
 import { getPendingSubmissions } from '../db.js';
 import { syncOfflineQueue } from '../sync.js';
+import { t } from '../i18n.js';
 
 export async function renderQueueDrawer(drawerContainer, onClose) {
   const pending = await getPendingSubmissions();
@@ -25,24 +26,28 @@ export async function renderQueueDrawer(drawerContainer, onClose) {
         </p>
 
         <div style="display: flex; flex-direction: column; gap: 10px; max-height: 260px; overflow-y: auto;">
-          ${pending.map(p => `
-            <div style="background: #F8FAFC; border: 1px solid var(--color-border); border-radius: 8px; padding: 12px;">
-              <div style="display: flex; justify-content: space-between; align-items: center;">
-                <span class="badge ${p.activity === 'CONCRETE' ? 'badge-provisional' : 'badge-pass'}" style="font-size: 10px;">
-                  ${p.activity}
-                </span>
-                <span style="font-size: 11px; color: var(--color-text-muted);">
-                  ${new Date(p.queued_at).toLocaleTimeString('es-PE')}
-                </span>
+          ${pending.map(p => {
+            const trucksCount = p.measurements?.trucks?.length;
+            const truckBadge = trucksCount ? ` • ${trucksCount} mixers` : '';
+            return `
+              <div style="background: #F8FAFC; border: 1px solid var(--color-border); border-radius: 8px; padding: 12px;">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                  <span class="badge ${p.activity === 'CONCRETE' ? 'badge-provisional' : 'badge-pass'}" style="font-size: 10px;">
+                    ${p.activity}${truckBadge}
+                  </span>
+                  <span style="font-size: 11px; color: var(--color-text-muted);">
+                    ${new Date(p.queued_at).toLocaleTimeString()}
+                  </span>
+                </div>
+                <div style="font-size: 13px; font-weight: 700; color: #0F172A; margin-top: 6px;">
+                  Progresiva ${p.chainage} | Paño ${p.panel}
+                </div>
+                <div style="font-size: 11px; color: var(--color-text-muted); margin-top: 2px;">
+                  ID Clave: ${p.idempotency_key}
+                </div>
               </div>
-              <div style="font-size: 13px; font-weight: 700; color: #0F172A; margin-top: 6px;">
-                Progresiva ${p.chainage} | Paño ${p.panel}
-              </div>
-              <div style="font-size: 11px; color: var(--color-text-muted); margin-top: 2px;">
-                ID Clave: ${p.idempotency_key}
-              </div>
-            </div>
-          `).join('')}
+            `;
+          }).join('')}
         </div>
 
         <div style="margin-top: 20px;">
