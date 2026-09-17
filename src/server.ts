@@ -8,6 +8,7 @@ import { getDatabase } from './db/database.js';
 import { initializeSchema } from './db/schema.js';
 import { seedDatabase } from './db/seed.js';
 import { createApiRouter } from './api/routes.js';
+import { SupabaseSyncService } from './services/supabase_sync.service.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -18,6 +19,11 @@ export function createApp(dbInstance?: any) {
   const db = dbInstance || getDatabase();
 
   initializeSchema(db);
+
+  // Sync with Supabase Cloud if configured
+  SupabaseSyncService.syncFromSupabase(db).catch(err => {
+    console.warn('⚠️ [SUPABASE] Error durante sincronización inicial:', err.message);
+  });
 
   // Seed database only if explicitly requested (e.g. SEED_DATABASE=true) or in test suite
   if (process.env.SEED_DATABASE === 'true' || process.env.NODE_ENV === 'test') {

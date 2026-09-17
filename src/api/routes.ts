@@ -9,6 +9,7 @@ import { ProtocolService } from '../services/protocol.service.js';
 import { PhotoService } from '../services/photo.service.js';
 import { OverdueService } from '../services/overdue.service.js';
 import { generateDeviceToken, hashPin, verifyPin } from '../services/integrity.service.js';
+import { SupabaseSyncService } from '../services/supabase_sync.service.js';
 import { ProjectRecord, SupportedLanguage } from '../types.js';
 
 const upload = multer({
@@ -280,6 +281,14 @@ export function createApiRouter(db: DatabaseSync): Router {
       }
 
       const created = db.prepare(`SELECT * FROM projects WHERE id = ?`).get(id);
+
+      // Mirror to Supabase Cloud if configured
+      const savedCriteria = db.prepare(`SELECT * FROM criteria WHERE project_id = ?`).all(id);
+      const savedTechs = db.prepare(`SELECT * FROM technicians WHERE project_id = ?`).all(id);
+      SupabaseSyncService.pushProject(created, savedCriteria, savedTechs).catch(err => {
+        console.warn('⚠️ [SUPABASE] Error guardando proyecto:', err.message);
+      });
+
       return res.status(201).json(created);
     } catch (err: any) {
       return res.status(500).json({ error: 'CREATE_FAILED', message: err.message });

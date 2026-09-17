@@ -20,6 +20,7 @@ import { PhotoService } from './photo.service.js';
 import { NotificationService } from './notification.service.js';
 import { PdfService } from './pdf.service.js';
 import { computeProtocolIntegrityHash, verifyPin } from './integrity.service.js';
+import { SupabaseSyncService } from './supabase_sync.service.js';
 
 export class ProtocolService {
   private validationService: ValidationService;
@@ -331,6 +332,14 @@ export class ProtocolService {
       lang
     });
 
+    // 16. Mirror Protocol to Supabase Cloud if configured
+    const savedTrucks = this.db.prepare(`SELECT * FROM concrete_trucks WHERE protocol_id = ?`).all(protocolId);
+    const savedCylinders = this.db.prepare(`SELECT * FROM cylinders WHERE protocol_id = ?`).all(protocolId);
+    const savedNcs = this.db.prepare(`SELECT * FROM nonconformances WHERE protocol_id = ?`).all(protocolId);
+    SupabaseSyncService.pushProtocol(protocolRecord, savedTrucks, savedCylinders, savedNcs).catch(err => {
+      console.warn('⚠️ [SUPABASE] Error guardando protocolo:', err.message);
+    });
+
     return {
       protocol_id: protocolId,
       verdict,
@@ -463,6 +472,16 @@ export class ProtocolService {
       technicianRole: tech ? tech.role : 'Especialista',
       nonconformanceId,
       lang
+    });
+
+    // Mirror cylinder break update to Supabase Cloud if configured
+    const updatedCyl = this.db.prepare(`SELECT * FROM cylinders WHERE id = ?`).get(cylinder.id);
+    let createdNc = null;
+    if (nonconformanceId) {
+      createdNc = this.db.prepare(`SELECT * FROM nonconformances WHERE id = ?`).get(nonconformanceId);
+    }
+    SupabaseSyncService.pushCylinderResult(updatedCyl, newProtocolVerdict, createdNc).catch(err => {
+      console.warn('⚠️ [SUPABASE] Error actualizando probeta:', err.message);
     });
 
     return {
