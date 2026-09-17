@@ -18,7 +18,11 @@ export function createApp(dbInstance?: any) {
   const db = dbInstance || getDatabase();
 
   initializeSchema(db);
-  seedDatabase(db);
+
+  // Seed database only if explicitly requested (e.g. SEED_DATABASE=true) or in test suite
+  if (process.env.SEED_DATABASE === 'true' || process.env.NODE_ENV === 'test') {
+    seedDatabase(db);
+  }
 
   app.use(cors());
   app.use(express.json({ limit: '10mb' }));

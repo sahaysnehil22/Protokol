@@ -106,25 +106,18 @@ export function renderProjectSetupView(container, onProjectCreated, onCancel) {
           </div>
         </div>
 
-        <!-- 3. Notificaciones y Personal Inicial -->
-        <div style="font-size: 13px; font-weight: 800; color: #0284C7; text-transform: uppercase; margin-top: 20px; margin-bottom: 12px;">
-          3. Especialista de Calidad Inicial
+        <!-- 3. Equipo de Ingenieros y Especialistas del Proyecto -->
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 24px; margin-bottom: 12px; flex-wrap: wrap; gap: 8px;">
+          <div style="font-size: 13px; font-weight: 800; color: #0284C7; text-transform: uppercase;">
+            3. Equipo de Ingenieros y Especialistas (${t('nav.projects')})
+          </div>
+          <button type="button" id="btn-add-tech-row" class="btn btn-outline" style="font-size: 11px; padding: 2px 10px; height: 28px; min-height: 28px;">
+            + Agregar Ingeniero / Especialista
+          </button>
         </div>
 
-        <div class="form-group">
-          <label class="form-label">Nombre del Especialista</label>
-          <input type="text" id="tech-name" class="form-input" placeholder="Ing. Especialista de Calidad" value="Ing. Especialista de Calidad" required />
-        </div>
-
-        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
-          <div class="form-group">
-            <label class="form-label">PIN de Campo (4 dígitos)</label>
-            <input type="password" maxlength="4" pattern="[0-9]*" inputmode="numeric" id="tech-pin" class="form-input" value="1234" required style="text-align:center; font-size:18px;" />
-          </div>
-          <div class="form-group">
-            <label class="form-label">${t('setup.recipients')}</label>
-            <input type="tel" id="proj-phone" class="form-input" placeholder="+51966000001" value="+51966000001" />
-          </div>
+        <div id="tech-roster-container" style="display: flex; flex-direction: column; gap: 12px; margin-bottom: 18px;">
+          <!-- Dynamically populated engineer cards -->
         </div>
 
         <div id="setup-error" style="color: #F87171; font-size: 13px; margin-bottom: 14px; display: none;"></div>
@@ -138,6 +131,8 @@ export function renderProjectSetupView(container, onProjectCreated, onCancel) {
 
   const form = container.querySelector('#project-setup-form');
   const errorDiv = container.querySelector('#setup-error');
+  const rosterContainer = container.querySelector('#tech-roster-container');
+  const addTechBtn = container.querySelector('#btn-add-tech-row');
   const fcInput = container.querySelector('#proj-fc');
   const fcPreset = container.querySelector('#proj-fc-preset');
 
@@ -148,6 +143,99 @@ export function renderProjectSetupView(container, onProjectCreated, onCancel) {
       }
     });
   }
+
+  let engineersList = [
+    {
+      name: '',
+      role: 'Quality Specialist',
+      cip: '',
+      pin: '1234',
+      whatsapp: ''
+    }
+  ];
+
+  function renderEngineerCards() {
+    rosterContainer.innerHTML = engineersList.map((eng, idx) => `
+      <div class="card tech-card-entry" data-index="${idx}" style="background: #F8FAFC; border: 1px solid #CBD5E1; padding: 12px; border-radius: 8px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+          <span style="font-size: 11px; font-weight: 800; color: #0284C7; text-transform: uppercase;">
+            Ingeniero / Especialista #${idx + 1}
+          </span>
+          ${engineersList.length > 1 ? `
+            <button type="button" class="btn btn-outline btn-remove-eng" data-index="${idx}" style="font-size: 11px; padding: 2px 8px; height: 24px; min-height: 24px; color: #EF4444; border-color: #FCA5A5;">
+              ✕ Eliminar
+            </button>
+          ` : ''}
+        </div>
+
+        <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 8px; margin-bottom: 8px;">
+          <div>
+            <label class="form-label" style="font-size: 11px; margin-bottom: 2px;">Nombre Completo</label>
+            <input type="text" class="form-input eng-name" placeholder="Ej. Ing. Maria Gonzales" value="${eng.name}" required style="font-size: 13px;" />
+          </div>
+          <div>
+            <label class="form-label" style="font-size: 11px; margin-bottom: 2px;">Colegiatura CIP (Opcional)</label>
+            <input type="text" class="form-input eng-cip" placeholder="Ej. 182940" value="${eng.cip}" style="font-size: 13px;" />
+          </div>
+        </div>
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px;">
+          <div>
+            <label class="form-label" style="font-size: 11px; margin-bottom: 2px;">Rol en el Proyecto</label>
+            <select class="form-input eng-role" style="font-size: 12px;">
+              <option value="Quality Specialist" ${eng.role === 'Quality Specialist' ? 'selected' : ''}>Especialista Calidad</option>
+              <option value="Site Resident" ${eng.role === 'Site Resident' ? 'selected' : ''}>Residente de Obra</option>
+              <option value="Supervisor" ${eng.role === 'Supervisor' ? 'selected' : ''}>Supervisor de Obra</option>
+              <option value="Soils Specialist" ${eng.role === 'Soils Specialist' ? 'selected' : ''}>Especialista en Suelos</option>
+              <option value="Structures Specialist" ${eng.role === 'Structures Specialist' ? 'selected' : ''}>Especialista Estructuras</option>
+              <option value="Safety Specialist" ${eng.role === 'Safety Specialist' ? 'selected' : ''}>Especialista Seguridad</option>
+              <option value="Assistant" ${eng.role === 'Assistant' ? 'selected' : ''}>Asistente de Campo</option>
+            </select>
+          </div>
+
+          <div>
+            <label class="form-label" style="font-size: 11px; margin-bottom: 2px;">PIN de Campo (4 dígitos)</label>
+            <input type="password" maxlength="4" pattern="[0-9]*" inputmode="numeric" class="form-input eng-pin" placeholder="1234" value="${eng.pin}" required style="font-size: 14px; text-align: center; letter-spacing: 2px;" />
+          </div>
+
+          <div>
+            <label class="form-label" style="font-size: 11px; margin-bottom: 2px;">WhatsApp (Alertas)</label>
+            <input type="tel" class="form-input eng-phone" placeholder="+51987654321" value="${eng.whatsapp}" style="font-size: 12px;" />
+          </div>
+        </div>
+      </div>
+    `).join('');
+
+    rosterContainer.querySelectorAll('.tech-card-entry').forEach(card => {
+      const idx = parseInt(card.getAttribute('data-index'), 10);
+      card.querySelector('.eng-name').addEventListener('input', (e) => { engineersList[idx].name = e.target.value; });
+      card.querySelector('.eng-cip').addEventListener('input', (e) => { engineersList[idx].cip = e.target.value; });
+      card.querySelector('.eng-role').addEventListener('change', (e) => { engineersList[idx].role = e.target.value; });
+      card.querySelector('.eng-pin').addEventListener('input', (e) => { engineersList[idx].pin = e.target.value; });
+      card.querySelector('.eng-phone').addEventListener('input', (e) => { engineersList[idx].whatsapp = e.target.value; });
+    });
+
+    rosterContainer.querySelectorAll('.btn-remove-eng').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const idx = parseInt(e.target.getAttribute('data-index'), 10);
+        engineersList.splice(idx, 1);
+        renderEngineerCards();
+      });
+    });
+  }
+
+  addTechBtn.addEventListener('click', () => {
+    engineersList.push({
+      name: '',
+      role: 'Quality Specialist',
+      cip: '',
+      pin: '1234',
+      whatsapp: ''
+    });
+    renderEngineerCards();
+  });
+
+  renderEngineerCards();
 
   container.querySelector('#btn-cancel-setup').addEventListener('click', onCancel);
 
@@ -166,17 +254,31 @@ export function renderProjectSetupView(container, onProjectCreated, onCancel) {
     const default_design_fc = parseFloat(container.querySelector('#proj-fc').value);
     const slump_min = parseFloat(container.querySelector('#proj-slump-min').value);
     const slump_max = parseFloat(container.querySelector('#proj-slump-max').value);
-    const tech_name = container.querySelector('#tech-name').value.trim();
-    const tech_pin = container.querySelector('#tech-pin').value.trim();
-    const phone = container.querySelector('#proj-phone').value.trim();
 
-    if (tech_pin.length !== 4) {
-      errorDiv.innerText = t('identify.err_pin');
+    // Validate technicians
+    if (engineersList.length === 0) {
+      errorDiv.innerText = 'Debe registrar al menos un ingeniero o especialista para el proyecto.';
       errorDiv.style.display = 'block';
       return;
     }
 
+    for (let i = 0; i < engineersList.length; i++) {
+      const eng = engineersList[i];
+      if (!eng.name.trim()) {
+        errorDiv.innerText = `Por favor ingrese el nombre del Ingeniero #${i + 1}`;
+        errorDiv.style.display = 'block';
+        return;
+      }
+      if (!eng.pin || eng.pin.trim().length !== 4) {
+        errorDiv.innerText = `El PIN para "${eng.name}" debe tener exactamente 4 dígitos.`;
+        errorDiv.style.display = 'block';
+        return;
+      }
+    }
+
     try {
+      const recipients = engineersList.map(e => e.whatsapp).filter(Boolean).join(', ') || '+51966000001';
+
       const payload = {
         id,
         name,
@@ -187,7 +289,7 @@ export function renderProjectSetupView(container, onProjectCreated, onCancel) {
         road_section,
         timezone: 'America/Lima',
         timezone_offset: '-05:00',
-        whatsapp_recipients: phone,
+        whatsapp_recipients: recipients,
         sampling_basis: 'PER_TRUCK',
         cylinders_per_truck,
         default_design_fc,
@@ -226,14 +328,13 @@ export function renderProjectSetupView(container, onProjectCreated, onCancel) {
             source_reference: 'Especificaciones Técnicas'
           }
         ],
-        technicians: [
-          {
-            name: tech_name,
-            role: 'Quality Specialist',
-            pin: tech_pin,
-            whatsapp: phone
-          }
-        ]
+        technicians: engineersList.map(e => ({
+          name: e.name.trim(),
+          role: e.role,
+          cip_number: e.cip.trim() || null,
+          pin: e.pin.trim(),
+          whatsapp: e.whatsapp.trim() || ''
+        }))
       };
 
       const res = await fetch('/api/projects', {
