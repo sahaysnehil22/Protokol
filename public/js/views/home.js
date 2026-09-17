@@ -1,12 +1,12 @@
 // PROTOKOL — View: Home & Activity Selector
 import { t } from '../i18n.js';
 
-export function renderHomeView(container, session, onSelectActivity, onOpenStatusView, onOpenProjectSetup) {
+export function renderHomeView(container, session, onSelectActivity, onOpenStatusView, onOpenProjectSetup, onOpenPortal) {
   const projectId = session.project_id || localStorage.getItem('protokol_active_project') || 'AY-728-001';
 
   container.innerHTML = `
     <div style="margin-bottom: 20px;">
-      <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+      <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 10px;">
         <div>
           <div style="display: flex; align-items: center; gap: 8px;">
             <span style="font-size: 11px; font-weight: 800; color: #0284C7; letter-spacing: 0.5px; text-transform: uppercase;">
@@ -20,6 +20,9 @@ export function renderHomeView(container, session, onSelectActivity, onOpenStatu
             ${session.name} <span style="color: var(--color-text-muted);">• ${session.role}</span>
           </p>
         </div>
+        <button id="btn-back-portal" class="btn btn-outline" style="font-size: 11px; padding: 2px 10px; height: 30px; min-height: 30px; white-space: nowrap;">
+          ${t('portal.change_project')}
+        </button>
       </div>
     </div>
 
@@ -77,4 +80,9 @@ export function renderHomeView(container, session, onSelectActivity, onOpenStatu
   container.querySelector('#btn-act-steel').addEventListener('click', () => onSelectActivity('STEEL'));
   container.querySelector('#btn-status-view').addEventListener('click', () => onOpenStatusView());
   container.querySelector('#btn-setup-view').addEventListener('click', () => onOpenProjectSetup());
+
+  const backPortalBtn = container.querySelector('#btn-back-portal');
+  if (backPortalBtn && onOpenPortal) {
+    backPortalBtn.addEventListener('click', () => onOpenPortal());
+  }
 }

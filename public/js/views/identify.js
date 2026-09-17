@@ -2,12 +2,18 @@
 import { setConfigItem, getConfigItem } from '../db.js';
 import { t } from '../i18n.js';
 
-export async function renderIdentifyView(container, onAuthenticated, onOpenProjectSetup) {
+export async function renderIdentifyView(container, onAuthenticated, onOpenProjectSetup, onBackToPortal) {
   const currentToken = localStorage.getItem('protokol_device_token') || 'dvc_pilot_qa_01';
   let activeProjectId = localStorage.getItem('protokol_active_project') || 'AY-728-001';
 
   container.innerHTML = `
-    <div class="card" style="margin-top: 10px;">
+    <div style="margin-bottom: 10px;">
+      <button type="button" id="btn-back-to-portal" class="btn btn-outline" style="font-size: 12px; padding: 4px 12px; height: 32px; min-height: 32px;">
+        ${t('portal.change_project')}
+      </button>
+    </div>
+
+    <div class="card" style="margin-top: 6px;">
       <div style="text-align: center; margin-bottom: 20px;">
         <div style="font-size: 32px; margin-bottom: 8px;">👷‍♂️</div>
         <h2 style="font-size: 20px; font-weight: 800; color: #0F172A;">${t('identify.title')}</h2>
@@ -91,6 +97,11 @@ export async function renderIdentifyView(container, onAuthenticated, onOpenProje
   const gotoSetupBtn = container.querySelector('#btn-goto-setup');
 
   gotoSetupBtn.addEventListener('click', () => onOpenProjectSetup());
+
+  const backToPortalBtn = container.querySelector('#btn-back-to-portal');
+  if (backToPortalBtn && onBackToPortal) {
+    backToPortalBtn.addEventListener('click', () => onBackToPortal());
+  }
 
   let projectsList = [];
 

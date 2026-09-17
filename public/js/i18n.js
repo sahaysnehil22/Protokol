@@ -14,6 +14,16 @@ const translations = {
     'nav.projects': 'Proyectos',
     'nav.new_project': '+ Nuevo Proyecto',
 
+    // Project Portal View
+    'portal.title': 'Proyectos de Infraestructura Vial',
+    'portal.subtitle': 'Seleccione un proyecto para ingresar a la gestión de calidad en campo',
+    'portal.search': 'Buscar por nombre, código o tramo...',
+    'portal.open_project': 'Abrir Proyecto →',
+    'portal.empty': 'No se encontraron proyectos registrados.',
+    'portal.sampling': 'Muestreo',
+    'portal.default_fc': 'f\'c Base',
+    'portal.change_project': '← Cambiar de Proyecto',
+
     // Home View
     'home.quality_record': 'Registro de Calidad en Campo',
     'home.select_activity': 'Seleccione Actividad a Liberar',
@@ -153,6 +163,16 @@ const translations = {
     'nav.lang_toggle': 'ES',
     'nav.projects': 'Projects',
     'nav.new_project': '+ New Project',
+
+    // Project Portal View
+    'portal.title': 'Highway Infrastructure Projects',
+    'portal.subtitle': 'Select a project to enter field quality certification',
+    'portal.search': 'Search by name, code, or road section...',
+    'portal.open_project': 'Open Project →',
+    'portal.empty': 'No registered projects found.',
+    'portal.sampling': 'Sampling',
+    'portal.default_fc': 'Base f\'c',
+    'portal.change_project': '← Change Project',
 
     // Home View
     'home.quality_record': 'Field Quality Inspection',

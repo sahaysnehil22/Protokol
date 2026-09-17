@@ -77,12 +77,21 @@ export function renderProjectSetupView(container, onProjectCreated, onCancel) {
           </div>
           <div class="form-group">
             <label class="form-label">${t('setup.default_fc')}</label>
-            <select id="proj-fc" class="form-input">
-              <option value="280">280 kg/cm² (Pavimento)</option>
-              <option value="210" selected>210 kg/cm² (Estructural)</option>
-              <option value="175">175 kg/cm² (Muros)</option>
-              <option value="140">140 kg/cm² (Solado)</option>
-            </select>
+            <div style="display: flex; gap: 8px;">
+              <input type="number" id="proj-fc" class="form-input" value="210" min="50" max="1000" step="5" required style="font-weight: 700; flex: 1;" />
+              <select id="proj-fc-preset" class="form-input" style="width: 140px; font-size: 11px; color: #475569;">
+                <option value="">Presets...</option>
+                <option value="140">140 (Solado)</option>
+                <option value="175">175 (Muros)</option>
+                <option value="210">210 (Estructural)</option>
+                <option value="245">245 (Puentes)</option>
+                <option value="280">280 (Pavimento)</option>
+                <option value="315">315 (Vigas Post.)</option>
+                <option value="350">350 (Alta Res.)</option>
+                <option value="420">420 (Especial)</option>
+              </select>
+            </div>
+            <span class="form-label-hint">kg/cm² (Ingrese cualquier valor numérico o elija un preset)</span>
           </div>
         </div>
 
@@ -129,6 +138,16 @@ export function renderProjectSetupView(container, onProjectCreated, onCancel) {
 
   const form = container.querySelector('#project-setup-form');
   const errorDiv = container.querySelector('#setup-error');
+  const fcInput = container.querySelector('#proj-fc');
+  const fcPreset = container.querySelector('#proj-fc-preset');
+
+  if (fcPreset && fcInput) {
+    fcPreset.addEventListener('change', () => {
+      if (fcPreset.value) {
+        fcInput.value = fcPreset.value;
+      }
+    });
+  }
 
   container.querySelector('#btn-cancel-setup').addEventListener('click', onCancel);
 

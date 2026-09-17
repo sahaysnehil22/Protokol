@@ -9,6 +9,7 @@ import { renderVerdictView } from './views/verdict.js';
 import { renderQueueDrawer } from './views/queue.js';
 import { renderStatusView } from './views/status_view.js';
 import { renderProjectSetupView } from './views/project_setup.js';
+import { renderProjectPortalView } from './views/project_portal.js';
 
 class App {
   constructor() {
@@ -20,7 +21,7 @@ class App {
     this.langToggleBtn = document.getElementById('btn-lang-toggle');
 
     this.session = null;
-    this.currentView = 'identify';
+    this.currentView = 'portal';
     this.currentParams = {};
     this.lastSubmissionResult = null;
   }
@@ -46,16 +47,27 @@ class App {
     // 4. Bind network status & queue drawer
     this.bindNetworkStatus();
 
-    // 5. Bind Language Switcher
+    // 5. Bind Language Switcher & Brand Home Link
     this.bindLanguageSwitcher();
+    this.bindBrandLink();
 
     // 6. Check existing session
     const savedSession = await getConfigItem('session');
     if (savedSession) {
       this.session = savedSession;
-      this.navigateTo('home');
-    } else {
-      this.navigateTo('identify');
+    }
+
+    // Landing screen is the Project Portal
+    this.navigateTo('portal');
+  }
+
+  bindBrandLink() {
+    const brandLink = document.getElementById('brand-link');
+    if (brandLink) {
+      brandLink.addEventListener('click', (e) => {
+        e.preventDefault();
+        this.navigateTo('portal');
+      });
     }
   }
 
@@ -126,6 +138,17 @@ class App {
     this.mainContainer.innerHTML = '';
 
     switch (viewName) {
+      case 'portal':
+        renderProjectPortalView(
+          this.mainContainer,
+          (projectId) => {
+            localStorage.setItem('protokol_active_project', projectId);
+            this.navigateTo('identify');
+          },
+          () => this.navigateTo('setup')
+        );
+        break;
+
       case 'identify':
         renderIdentifyView(
           this.mainContainer,
@@ -133,7 +156,8 @@ class App {
             this.session = session;
             this.navigateTo('home');
           },
-          () => this.navigateTo('setup')
+          () => this.navigateTo('setup'),
+          () => this.navigateTo('portal')
         );
         break;
 
@@ -141,11 +165,10 @@ class App {
         renderProjectSetupView(
           this.mainContainer,
           (createdProject) => {
-            this.navigateTo('identify');
+            this.navigateTo('portal');
           },
           () => {
-            if (this.session) this.navigateTo('home');
-            else this.navigateTo('identify');
+            this.navigateTo('portal');
           }
         );
         break;
@@ -156,7 +179,8 @@ class App {
           this.session,
           (activity) => this.navigateTo('form', { activity }),
           () => this.navigateTo('status'),
-          () => this.navigateTo('setup')
+          () => this.navigateTo('setup'),
+          () => this.navigateTo('portal')
         );
         break;
 
