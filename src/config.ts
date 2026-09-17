@@ -26,5 +26,9 @@ export const config = {
   
   // Default regional timezone fallback
   defaultTimezoneOffset: process.env.DEFAULT_TIMEZONE_OFFSET || '-05:00',
-  defaultTimezoneName: process.env.DEFAULT_TIMEZONE_NAME || 'America/Lima'
+  defaultTimezoneName: process.env.DEFAULT_TIMEZONE_NAME || 'America/Lima',
+
+  // Supabase Cloud Configuration
+  supabaseUrl: process.env.SUPABASE_URL || '',
+  supabaseKey: process.env.SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_KEY || ''
 };
