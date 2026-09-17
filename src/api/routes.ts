@@ -570,14 +570,18 @@ export function createApiRouter(db: DatabaseSync): Router {
 
   // Verify Technician PIN for Field Login
   router.post('/technicians/verify-pin', (req: Request, res: Response) => {
-    const { project_id, pin } = req.body;
+    const { project_id, pin, technician_id } = req.body;
     if (!project_id || !pin) {
       return res.status(400).json({ error: 'MISSING_PARAMS' });
     }
 
-    const techs = db.prepare(`
+    let techs = db.prepare(`
       SELECT id, name, role, pin_hash, device_token FROM technicians WHERE project_id = ?
     `).all(project_id) as any[];
+
+    if (technician_id) {
+      techs = techs.filter(t => t.id === technician_id);
+    }
 
     const matched = techs.find(t => verifyPin(pin, t.pin_hash));
     if (!matched) {

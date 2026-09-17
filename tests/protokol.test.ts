@@ -747,4 +747,148 @@ describe('PROTOKOL Phase 0 — v2.4 Architecture & Dynamic Project Configuration
     expect(dossierRes.status).toBe(200);
     expect(dossierRes.body.dossier_url).toBe('/api/projects/AY-728-001/dossier.pdf');
   });
+
+  // =========================================================================
+  // User Scenario: Save Project with David Valdez Ochoa and Engineer Approval
+  // =========================================================================
+  it('User Scenario: Save Project with David Valdez Ochoa, verify PIN and submit conforming protocol', async () => {
+    // 1. Create project with exact payload sent by project_setup.js
+    const slump_min = 8.9;
+    const slump_max = 12.7;
+    const default_design_fc = 280;
+    const cylinders_per_truck = 4;
+
+    const createRes = await request(app)
+      .post('/api/projects')
+      .send({
+        id: 'PROY-2026-01',
+        name: 'Mejoramiento Vial Tramo Ayacucho',
+        contract_number: 'N° 102-2026-GORE',
+        entity: 'Gobierno Regional',
+        execution_mode: 'Administración Directa',
+        location: 'Huamanga, Ayacucho',
+        road_section: 'km 0+000 a 5+200',
+        timezone: 'America/Lima',
+        timezone_offset: '-05:00',
+        whatsapp_recipients: '+5193176825',
+        sampling_basis: 'PER_TRUCK',
+        cylinders_per_truck,
+        default_design_fc,
+        criteria: [
+          {
+            activity: 'CONCRETE',
+            field: 'formwork_approved',
+            operator: 'EQ',
+            expected_value: 'true',
+            unit: 'checklist',
+            source_reference: 'Checklist Previo de Encofrado'
+          },
+          {
+            activity: 'CONCRETE',
+            field: 'slump_cm',
+            operator: 'BETWEEN',
+            min_value: slump_min,
+            max_value: slump_max,
+            unit: 'cm',
+            source_reference: 'Diseño de Mezclas Acreditado'
+          },
+          {
+            activity: 'CONCRETE',
+            field: 'cylinders_cast',
+            operator: 'GTE',
+            min_value: cylinders_per_truck,
+            unit: 'probetas/mixer',
+            source_reference: `Regla de Muestreo: ${cylinders_per_truck} probetas por mixer`
+          },
+          {
+            activity: 'CONCRETE',
+            field: 'design_fc',
+            operator: 'GTE',
+            min_value: default_design_fc,
+            unit: 'kg/cm²',
+            source_reference: 'Especificaciones Técnicas'
+          }
+        ],
+        technicians: [
+          {
+            name: 'David Valdez Ochoa',
+            role: 'Quality Specialist',
+            cip_number: '182940',
+            pin: '1234',
+            whatsapp: '+5193176825'
+          }
+        ]
+      });
+
+    expect(createRes.status).toBe(201);
+    expect(createRes.body.id).toBe('PROY-2026-01');
+    expect(createRes.body.name).toBe('Mejoramiento Vial Tramo Ayacucho');
+
+    // 2. Verify technician is registered
+    const techRes = await request(app).get('/api/projects/PROY-2026-01/technicians');
+    expect(techRes.status).toBe(200);
+    expect(techRes.body.length).toBe(1);
+    const tech = techRes.body[0];
+    expect(tech.name).toBe('David Valdez Ochoa');
+    expect(tech.cip_number).toBe('182940');
+    expect(tech.device_token).toBeDefined();
+
+    // 3. Authenticate engineer with PIN 1234
+    const authRes = await request(app)
+      .post('/api/technicians/verify-pin')
+      .send({
+        project_id: 'PROY-2026-01',
+        pin: '1234',
+        technician_id: tech.id
+      });
+    expect(authRes.status).toBe(200);
+    expect(authRes.body.name).toBe('David Valdez Ochoa');
+    expect(authRes.body.device_token).toBe(tech.device_token);
+
+    // 4. Submit concrete protocol conforming to the project criteria
+    const protoRes = await request(app)
+      .post('/api/protocols')
+      .send({
+        project_id: 'PROY-2026-01',
+        device_token: tech.device_token,
+        technician_pin: '1234',
+        activity: 'CONCRETE',
+        recorded_at: new Date().toISOString(),
+        gps: { lat: -13.163, lng: -74.223, accuracy: 4.5 },
+        panel: '01',
+        chainage: '0+050',
+        measurements: {
+          formwork_approved: true,
+          trucks: [
+            {
+              truck_number: 1,
+              mixer_id: 'TRK-AYAC-01',
+              delivery_ticket: 'GR-1001',
+              batch_time: '08:30',
+              arrival_time: '09:00',
+              discharge_time: '09:15',
+              concrete_volume_m3: 8,
+              slump_cm: 10.5,
+              concrete_temp_c: 21.5,
+              ambient_temp_c: 20.0,
+              cylinders_cast: 4,
+              sample_time: '09:10',
+              cylinder_codes: ['C1', 'C2', 'C3', 'C4']
+            }
+          ]
+        },
+        idempotency_key: 'idemp-david-01'
+      });
+
+    expect(protoRes.status).toBe(201);
+    expect(protoRes.body.verdict).toBe('PROVISIONAL_PASS');
+    expect(protoRes.body.protocol_id).toBeDefined();
+
+    // 5. Verify status view for the new project reflects the conforming protocol
+    const status = await request(app).get('/api/projects/PROY-2026-01/status');
+    expect(status.status).toBe(200);
+    expect(status.body.protocols.length).toBe(1);
+    expect(status.body.summary.provisional).toBe(1);
+    expect(status.body.summary.failed).toBe(0);
+  });
 });

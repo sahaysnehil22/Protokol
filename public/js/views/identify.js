@@ -214,7 +214,7 @@ export async function renderIdentifyView(container, onAuthenticated, onOpenProje
       const res = await fetch('/api/technicians/verify-pin', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ project_id: selectedProj, pin })
+        body: JSON.stringify({ project_id: selectedProj, pin, technician_id: techId })
       });
 
       if (!res.ok) {

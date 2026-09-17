@@ -255,55 +255,124 @@ export function renderProjectSetupView(container, onProjectCreated, onCancel) {
     e.preventDefault();
     errorDiv.style.display = 'none';
 
-    const id = container.querySelector('#proj-id').value.trim();
-    const name = container.querySelector('#proj-name').value.trim();
-    const contract_number = container.querySelector('#proj-contract').value.trim();
-    const entity = container.querySelector('#proj-entity').value.trim();
-    const execution_mode = container.querySelector('#proj-mode').value;
-    const location = container.querySelector('#proj-location').value.trim();
-    const road_section = container.querySelector('#proj-section').value.trim();
-    const cylinders_per_truck = parseInt(container.querySelector('#proj-cylinders').value, 10);
-    let default_design_fc;
-    if (fcSelect.value === 'custom') {
-      default_design_fc = parseFloat(fcCustomInput.value);
-      if (isNaN(default_design_fc) || default_design_fc < 50 || default_design_fc > 1000) {
-        errorDiv.innerText = 'El valor de f\'c personalizado debe ser un número válido entre 50 y 1000 kg/cm².';
-        errorDiv.style.display = 'block';
-        fcCustomInput.focus();
-        return;
-      }
-    } else {
-      default_design_fc = parseFloat(fcSelect.value);
-    }
-
-    if (isNaN(slump_min) || isNaN(slump_max) || slump_min >= slump_max) {
-      errorDiv.innerText = 'El asentamiento (slump) mínimo debe ser un número menor al slump máximo.';
-      errorDiv.style.display = 'block';
-      return;
-    }
-
-    // Validate technicians
-    if (engineersList.length === 0) {
-      errorDiv.innerText = 'Debe registrar al menos un ingeniero o especialista para el proyecto.';
-      errorDiv.style.display = 'block';
-      return;
-    }
-
-    for (let i = 0; i < engineersList.length; i++) {
-      const eng = engineersList[i];
-      if (!eng.name.trim()) {
-        errorDiv.innerText = `Por favor ingrese el nombre del Ingeniero #${i + 1}`;
-        errorDiv.style.display = 'block';
-        return;
-      }
-      if (!eng.pin || eng.pin.trim().length !== 4) {
-        errorDiv.innerText = `El PIN para "${eng.name}" debe tener exactamente 4 dígitos.`;
-        errorDiv.style.display = 'block';
-        return;
-      }
-    }
+    const submitBtn = form.querySelector('button[type="submit"]');
+    const originalBtnHtml = submitBtn ? submitBtn.innerHTML : '';
 
     try {
+      const id = container.querySelector('#proj-id')?.value.trim() || '';
+      const name = container.querySelector('#proj-name')?.value.trim() || '';
+      const contract_number = container.querySelector('#proj-contract')?.value.trim() || '';
+      const entity = container.querySelector('#proj-entity')?.value.trim() || '';
+      const execution_mode = container.querySelector('#proj-mode')?.value || 'Administración Directa';
+      const location = container.querySelector('#proj-location')?.value.trim() || '';
+      const road_section = container.querySelector('#proj-section')?.value.trim() || '';
+      
+      const cylindersInput = container.querySelector('#proj-cylinders');
+      const cylinders_per_truck = cylindersInput ? parseInt(cylindersInput.value, 10) : 4;
+
+      const slumpMinInput = container.querySelector('#proj-slump-min');
+      const slumpMaxInput = container.querySelector('#proj-slump-max');
+      const slump_min = slumpMinInput ? parseFloat(slumpMinInput.value) : NaN;
+      const slump_max = slumpMaxInput ? parseFloat(slumpMaxInput.value) : NaN;
+
+      // Validate required project information
+      if (!id) {
+        errorDiv.innerText = 'El Código / ID del Proyecto es obligatorio (ej. PROY-2026-01).';
+        errorDiv.style.display = 'block';
+        container.querySelector('#proj-id')?.focus();
+        return;
+      }
+      if (!name) {
+        errorDiv.innerText = 'El Nombre Completo del Proyecto es obligatorio.';
+        errorDiv.style.display = 'block';
+        container.querySelector('#proj-name')?.focus();
+        return;
+      }
+      if (!contract_number) {
+        errorDiv.innerText = 'El Número de Contrato es obligatorio.';
+        errorDiv.style.display = 'block';
+        container.querySelector('#proj-contract')?.focus();
+        return;
+      }
+      if (!entity) {
+        errorDiv.innerText = 'La Entidad Propietaria / Contratante es obligatoria.';
+        errorDiv.style.display = 'block';
+        container.querySelector('#proj-entity')?.focus();
+        return;
+      }
+
+      if (isNaN(cylinders_per_truck) || cylinders_per_truck < 1) {
+        errorDiv.innerText = 'La cantidad de probetas por mixer debe ser un número entero mayor o igual a 1.';
+        errorDiv.style.display = 'block';
+        cylindersInput?.focus();
+        return;
+      }
+
+      let default_design_fc;
+      if (fcSelect && fcSelect.value === 'custom') {
+        default_design_fc = parseFloat(fcCustomInput.value);
+        if (isNaN(default_design_fc) || default_design_fc < 50 || default_design_fc > 1000) {
+          errorDiv.innerText = 'El valor de f\'c personalizado debe ser un número válido entre 50 y 1000 kg/cm².';
+          errorDiv.style.display = 'block';
+          fcCustomInput?.focus();
+          return;
+        }
+      } else {
+        default_design_fc = fcSelect ? parseFloat(fcSelect.value) : 280;
+      }
+
+      if (isNaN(slump_min) || isNaN(slump_max) || slump_min >= slump_max) {
+        errorDiv.innerText = 'El asentamiento (slump) mínimo debe ser un número menor al slump máximo.';
+        errorDiv.style.display = 'block';
+        slumpMinInput?.focus();
+        return;
+      }
+
+      // Sync latest values from DOM cards into engineersList
+      const techCards = rosterContainer.querySelectorAll('.tech-card-entry');
+      techCards.forEach(card => {
+        const idx = parseInt(card.getAttribute('data-index'), 10);
+        if (engineersList[idx]) {
+          const nameVal = card.querySelector('.eng-name')?.value;
+          const cipVal = card.querySelector('.eng-cip')?.value;
+          const roleVal = card.querySelector('.eng-role')?.value;
+          const pinVal = card.querySelector('.eng-pin')?.value;
+          const phoneVal = card.querySelector('.eng-phone')?.value;
+          if (nameVal !== undefined) engineersList[idx].name = nameVal.trim();
+          if (cipVal !== undefined) engineersList[idx].cip = cipVal.trim();
+          if (roleVal !== undefined) engineersList[idx].role = roleVal;
+          if (pinVal !== undefined) engineersList[idx].pin = pinVal.trim();
+          if (phoneVal !== undefined) engineersList[idx].whatsapp = phoneVal.trim();
+        }
+      });
+
+      // Validate technicians
+      if (engineersList.length === 0) {
+        errorDiv.innerText = 'Debe registrar al menos un ingeniero o especialista para el proyecto.';
+        errorDiv.style.display = 'block';
+        return;
+      }
+
+      for (let i = 0; i < engineersList.length; i++) {
+        const eng = engineersList[i];
+        if (!eng.name || !eng.name.trim()) {
+          errorDiv.innerText = `Por favor ingrese el nombre del Ingeniero #${i + 1}`;
+          errorDiv.style.display = 'block';
+          return;
+        }
+        if (!eng.pin || eng.pin.trim().length !== 4) {
+          errorDiv.innerText = `El PIN para "${eng.name}" debe tener exactamente 4 dígitos numéricos.`;
+          errorDiv.style.display = 'block';
+          return;
+        }
+      }
+
+      // Set loading state on button
+      if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = `⏳ ${t('setup.saving') || 'Guardando y Activando...'}`;
+      }
+
       const recipients = engineersList.map(e => e.whatsapp).filter(Boolean).join(', ') || '+51966000001';
 
       const payload = {
@@ -358,9 +427,9 @@ export function renderProjectSetupView(container, onProjectCreated, onCancel) {
         technicians: engineersList.map(e => ({
           name: e.name.trim(),
           role: e.role,
-          cip_number: e.cip.trim() || null,
+          cip_number: e.cip ? e.cip.trim() : null,
           pin: e.pin.trim(),
-          whatsapp: e.whatsapp.trim() || ''
+          whatsapp: e.whatsapp ? e.whatsapp.trim() : ''
         }))
       };
 
@@ -380,8 +449,13 @@ export function renderProjectSetupView(container, onProjectCreated, onCancel) {
       alert(t('setup.success'));
       onProjectCreated(created);
     } catch (err) {
-      errorDiv.innerText = err.message;
+      errorDiv.innerText = err.message || 'Error inesperado al guardar proyecto.';
       errorDiv.style.display = 'block';
+    } finally {
+      if (submitBtn) {
+        submitBtn.disabled = false;
+        submitBtn.innerHTML = originalBtnHtml;
+      }
     }
   });
 }

@@ -179,6 +179,7 @@ const translations = {
     'setup.slump_max': 'Asentamiento Slump Máximo (cm)',
     'setup.recipients': 'Teléfono(s) WhatsApp para Notificaciones',
     'setup.btn_create': '✓ Guardar y Activar Proyecto',
+    'setup.saving': 'Guardando y Activando Proyecto...',
     'setup.success': '¡Proyecto configurado y activado exitosamente!'
   },
   en: {
@@ -358,6 +359,7 @@ const translations = {
     'setup.slump_max': 'Maximum Slump (cm)',
     'setup.recipients': 'WhatsApp Alert Recipients (Phone)',
     'setup.btn_create': '✓ Save & Activate Project',
+    'setup.saving': 'Saving & Activating Project...',
     'setup.success': 'Project configured and activated successfully!'
   }
 };

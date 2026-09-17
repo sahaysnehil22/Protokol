@@ -165,7 +165,12 @@ class App {
         renderProjectSetupView(
           this.mainContainer,
           (createdProject) => {
-            this.navigateTo('portal');
+            if (createdProject && createdProject.id) {
+              localStorage.setItem('protokol_active_project', createdProject.id);
+              this.navigateTo('identify');
+            } else {
+              this.navigateTo('portal');
+            }
           },
           () => {
             this.navigateTo('portal');
