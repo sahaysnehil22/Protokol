@@ -780,7 +780,7 @@ export class ProtocolService {
   getProtocolSignatures(protocolId: string): ProtocolSignatureRecord[] {
     return this.db.prepare(`
       SELECT * FROM signatures WHERE protocol_id = ? ORDER BY sign_order ASC
-    `).all(protocolId) as ProtocolSignatureRecord[];
+    `).all(protocolId) as unknown as ProtocolSignatureRecord[];
   }
 
   /**
@@ -805,13 +805,13 @@ export class ProtocolService {
         SELECT * FROM checklist_templates
         WHERE project_id = ? AND activity = ? AND active = 1
         ORDER BY item_order ASC
-      `).all(projectId, activity) as ChecklistTemplateItem[];
+      `).all(projectId, activity) as unknown as ChecklistTemplateItem[];
     }
     return this.db.prepare(`
       SELECT * FROM checklist_templates
       WHERE project_id = ? AND active = 1
       ORDER BY activity ASC, item_order ASC
-    `).all(projectId) as ChecklistTemplateItem[];
+    `).all(projectId) as unknown as ChecklistTemplateItem[];
   }
 
   /**
@@ -900,7 +900,7 @@ export class ProtocolService {
 
     return this.db.prepare(`
       SELECT * FROM signatures WHERE protocol_id = ? AND signatory_id = ?
-    `).get(protocolId, tech.id) as ProtocolSignatureRecord;
+    `).get(protocolId, tech.id) as unknown as ProtocolSignatureRecord;
   }
 
   /**

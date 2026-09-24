@@ -171,7 +171,8 @@ export class PdfService {
           doc.text(String(t.truck_number), 45, y + 4);
           doc.text(t.mixer_id, 70, y + 4);
           doc.text(t.delivery_note, 160, y + 4);
-          doc.text(`${t.slump_cm.toFixed(1)} cm`, 260, y + 4);
+          const slumpText = t.slump ? `${t.slump}"` : (t.slump_cm !== undefined ? `${t.slump_cm.toFixed(1)} cm` : '-');
+          doc.text(slumpText, 260, y + 4);
           doc.text(`${t.cylinders_cast} und`, 340, y + 4);
           doc.text(`${t.design_fc}`, 415, y + 4);
 
