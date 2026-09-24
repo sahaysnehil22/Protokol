@@ -8,8 +8,8 @@ export function renderVerdictView(container, result, onNewProtocol, onOpenStatus
 
   if (result.verdict === 'PROVISIONAL_PASS') {
     verdictClass = 'badge-provisional';
-    verdictTitle = t('verdict.provisional_title');
-    verdictDesc = t('verdict.provisional_desc');
+    verdictTitle = 'APROBADO (Pendiente resultado de laboratorio a 28 días)';
+    verdictDesc = 'Cumple con los parámetros de inspección en campo. Pendiente resultado de rotura de probetas a 28 días para la certificación definitiva.';
   } else if (result.verdict === 'FAIL') {
     verdictClass = 'badge-fail';
     verdictTitle = t('verdict.fail_title');

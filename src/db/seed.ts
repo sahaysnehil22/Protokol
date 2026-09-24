@@ -56,24 +56,26 @@ export function seedDatabase(db: DatabaseSync): void {
     insertTech.run(m.id, PILOT_PROJECT_ID, m.name, defaultPinHash, m.device, m.phone, m.role, m.cip || null);
   }
 
-  // 3. Seed Pilot Validation Criteria (Sourced strictly from v2.4 Section 9.3)
+  // 3. Seed Pilot Validation Criteria (Sourced strictly from v2.4 Section 9.3 & F2)
   const insertCriterion = db.prepare(`
-    INSERT OR REPLACE INTO criteria (id, project_id, activity, field, operator, min_value, max_value, expected_value, unit, source_reference, is_active)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT OR REPLACE INTO criteria (id, project_id, activity, field, operator, min_value, max_value, allowed_values, expected_value, unit, source_reference, hold_point, is_active)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
 
   const criteriaList = [
     // CONCRETE
     {
-      id: 'crit_conc_formwork',
+      id: 'crit_conc_slump_discrete',
       activity: 'CONCRETE',
-      field: 'formwork_approved',
-      operator: 'EQ',
+      field: 'slump',
+      operator: 'IN',
       min_value: null,
       max_value: null,
-      expected_value: 'true',
-      unit: 'checklist',
-      source: 'EG-2013 / Pre-pour Checklist (Encofrado)'
+      allowed_values: JSON.stringify(['3.5', '4', '4.5', '5']),
+      expected_value: null,
+      unit: '"',
+      source: 'Especialista de Calidad 16-Sep + 20-Sep-2026 (Selector discreto: 3.5", 4", 4.5", 5")',
+      hold_point: 0
     },
     {
       id: 'crit_conc_slump',
@@ -82,9 +84,24 @@ export function seedDatabase(db: DatabaseSync): void {
       operator: 'BETWEEN',
       min_value: 8.9,  // 3.5 inches (v2.4 confirmed 16 Sep 2026)
       max_value: 12.7, // 5.0 inches (v2.4 confirmed 16 Sep 2026)
+      allowed_values: null,
       expected_value: null,
       unit: 'cm',
-      source: 'Accredited Lab Mix Design / Quality Specialist Confirmed (8.9 - 12.7 cm)'
+      source: 'Accredited Lab Mix Design / Quality Specialist Confirmed (8.9 - 12.7 cm)',
+      hold_point: 0
+    },
+    {
+      id: 'crit_conc_formwork',
+      activity: 'CONCRETE',
+      field: 'formwork_approved',
+      operator: 'EQ',
+      min_value: null,
+      max_value: null,
+      allowed_values: null,
+      expected_value: 'true',
+      unit: 'checklist',
+      source: 'EG-2013 / Pre-pour Checklist (Encofrado)',
+      hold_point: 1
     },
     {
       id: 'crit_conc_cylinders',
@@ -93,9 +110,11 @@ export function seedDatabase(db: DatabaseSync): void {
       operator: 'GTE',
       min_value: 4.0, // 4 cylinders per mixer truck (v2.4 confirmed 16 Sep 2026)
       max_value: null,
+      allowed_values: null,
       expected_value: null,
       unit: 'probetas/mixer',
-      source: 'EG-2013 / Quality Specialist Confirmed (4 probetas por mixer)'
+      source: 'EG-2013 / Quality Specialist Confirmed (4 probetas por mixer)',
+      hold_point: 0
     },
     {
       id: 'crit_conc_design_fc',
@@ -104,9 +123,38 @@ export function seedDatabase(db: DatabaseSync): void {
       operator: 'GTE',
       min_value: 210.0,
       max_value: null,
+      allowed_values: null,
       expected_value: null,
       unit: 'kg/cm²',
-      source: 'Expediente Técnico Specifications (140 - 280 kg/cm²)'
+      source: 'Expediente Técnico Specifications (140 - 280 kg/cm²)',
+      hold_point: 0
+    },
+    // FORMWORK (ENCOFRADO)
+    {
+      id: 'crit_form_alignment',
+      activity: 'FORMWORK',
+      field: 'alignment_deviation_mm',
+      operator: 'LTE',
+      min_value: null,
+      max_value: 5.0,
+      allowed_values: null,
+      expected_value: null,
+      unit: 'mm',
+      source: 'EG-2013 / Tolerancia de Encofrado (≤ 5 mm)',
+      hold_point: 1
+    },
+    {
+      id: 'crit_form_dimension',
+      activity: 'FORMWORK',
+      field: 'dimension_deviation_cm',
+      operator: 'LTE',
+      min_value: null,
+      max_value: 0.5,
+      allowed_values: null,
+      expected_value: null,
+      unit: 'cm',
+      source: 'Plano Estructural / Tolerancia Dimensional (≤ 0.5 cm)',
+      hold_point: 1
     },
     // COMPACTION
     {
@@ -116,9 +164,11 @@ export function seedDatabase(db: DatabaseSync): void {
       operator: 'GTE',
       min_value: 100.0,
       max_value: null,
+      allowed_values: null,
       expected_value: null,
       unit: '%',
-      source: 'Project Quality Plan (≥ 100% Modified Proctor)'
+      source: 'Project Quality Plan (≥ 100% Modified Proctor)',
+      hold_point: 1
     },
     {
       id: 'crit_comp_moisture',
@@ -127,9 +177,11 @@ export function seedDatabase(db: DatabaseSync): void {
       operator: 'BETWEEN',
       min_value: -1.5,
       max_value: 1.5,
+      allowed_values: null,
       expected_value: null,
       unit: '%',
-      source: 'Project Quality Plan (Within ±1.5% optimum)'
+      source: 'Project Quality Plan (Within ±1.5% optimum)',
+      hold_point: 0
     },
     {
       id: 'crit_comp_subbase',
@@ -138,9 +190,11 @@ export function seedDatabase(db: DatabaseSync): void {
       operator: 'GTE',
       min_value: 20.0,
       max_value: null,
+      allowed_values: null,
       expected_value: null,
       unit: 'cm',
-      source: 'Expediente Técnico Specifications (≥ 20 cm)'
+      source: 'Expediente Técnico Specifications (≥ 20 cm)',
+      hold_point: 0
     },
     {
       id: 'crit_comp_base',
@@ -149,9 +203,11 @@ export function seedDatabase(db: DatabaseSync): void {
       operator: 'GTE',
       min_value: 25.0,
       max_value: null,
+      allowed_values: null,
       expected_value: null,
       unit: 'cm',
-      source: 'Expediente Técnico Specifications (≥ 25 cm)'
+      source: 'Expediente Técnico Specifications (≥ 25 cm)',
+      hold_point: 0
     },
     // SURVEY
     {
@@ -161,9 +217,11 @@ export function seedDatabase(db: DatabaseSync): void {
       operator: 'LTE',
       min_value: null,
       max_value: 1.0,
+      allowed_values: null,
       expected_value: null,
       unit: 'cm',
-      source: 'Project Quality Plan (≤ 1.0 cm from design cota)'
+      source: 'Project Quality Plan (≤ 1.0 cm from design cota)',
+      hold_point: 1
     },
     // STEEL
     {
@@ -173,9 +231,11 @@ export function seedDatabase(db: DatabaseSync): void {
       operator: 'BETWEEN',
       min_value: 14.0,
       max_value: 16.0,
+      allowed_values: null,
       expected_value: null,
       unit: 'cm',
-      source: 'Structural Drawing (15 cm ±1.0 cm tolerance)'
+      source: 'Structural Drawing (15 cm ±1.0 cm tolerance)',
+      hold_point: 0
     },
     {
       id: 'crit_steel_cover',
@@ -184,9 +244,11 @@ export function seedDatabase(db: DatabaseSync): void {
       operator: 'GTE',
       min_value: 5.0,
       max_value: null,
+      allowed_values: null,
       expected_value: null,
       unit: 'cm',
-      source: 'EG-2013 / Structural Drawing (Recubrimiento ≥ 5 cm)'
+      source: 'EG-2013 / Structural Drawing (Recubrimiento ≥ 5 cm)',
+      hold_point: 1
     }
   ];
 
@@ -199,14 +261,63 @@ export function seedDatabase(db: DatabaseSync): void {
       c.operator,
       c.min_value,
       c.max_value,
+      c.allowed_values || null,
       c.expected_value,
       c.unit,
       c.source,
+      c.hold_point || 0,
       1
     );
   }
 
-  // 4. Seed Pilot Activity Schedule for R10 demo
+  // 4. Seed Checklist Templates (F1: Paper-format Checklist as Data for 5 Activities)
+  const insertChecklistTemplate = db.prepare(`
+    INSERT OR REPLACE INTO checklist_templates (id, project_id, activity, section, item_text, item_order, applicable_if, version, active)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1)
+  `);
+
+  const checklistItems = [
+    // COMPACTION
+    { id: 'chk_comp_1', act: 'COMPACTION', sec: '1. Material y Cantera', text: 'Material granular de cantera cumple con especificaciones técnicas del expediente y certificado de laboratorio.', order: 1 },
+    { id: 'chk_comp_2', act: 'COMPACTION', sec: '2. Preparación', text: 'Espesor de capa suelta verificado antes de iniciar el pase del rodillo compactador.', order: 2 },
+    { id: 'chk_comp_3', act: 'COMPACTION', sec: '3. Ensayos de Campo', text: 'Contenido de humedad de la muestra dentro de la tolerancia óptima (±1.5%).', order: 3 },
+    { id: 'chk_comp_4', act: 'COMPACTION', sec: '3. Ensayos de Campo', text: 'Densidad in-situ alcanza ≥100% de la máxima densidad seca del ensayo Proctor Modificado.', order: 4 },
+    { id: 'chk_comp_5', act: 'COMPACTION', sec: '4. Terminación', text: 'Superficie compactada uniforme, libre de ahuellamientos, fisuras o zonas blandas.', order: 5 },
+
+    // SURVEY
+    { id: 'chk_surv_1', act: 'SURVEY', sec: '1. Calibración', text: 'Estación total / nivel topográfico cuenta con certificado de calibración vigente.', order: 1 },
+    { id: 'chk_surv_2', act: 'SURVEY', sec: '2. Nivelación', text: 'Puntos de control topográfico (BM) y cotas de rasante verificados con tolerancia ≤ 1.0 cm.', order: 2 },
+    { id: 'chk_surv_3', act: 'SURVEY', sec: '3. Geometría', text: 'Alineamiento de eje y anchos de calzada y bermas conformes a secciones tipo.', order: 3 },
+    { id: 'chk_surv_4', act: 'SURVEY', sec: '3. Geometría', text: 'Pendientes longitudinales y bombeo transversal (S = 2.00%) verificados con plantilla.', order: 4 },
+
+    // STEEL
+    { id: 'chk_steel_1', act: 'STEEL', sec: '1. Materiales', text: 'El acero corrugado cuenta con certificado de calidad de fábrica y está libre de óxido escamoso o grasas.', order: 1 },
+    { id: 'chk_steel_2', act: 'STEEL', sec: '2. Colocación', text: 'Los diámetros y distribución de varillas coinciden con el plano estructural del expediente.', order: 2 },
+    { id: 'chk_steel_3', act: 'STEEL', sec: '2. Colocación', text: 'Espaciamiento entre barras de refuerzo verificado dentro de la tolerancia de diseño.', order: 3 },
+    { id: 'chk_steel_4', act: 'STEEL', sec: '3. Amarre y Apoyo', text: 'Recubrimiento libre de concreto asegurado con dados de mortero prefabricados (≥ 5 cm).', order: 4 },
+    { id: 'chk_steel_5', act: 'STEEL', sec: '3. Amarre y Apoyo', text: 'Intersecciones firmemente aseguradas con alambre negro de amarra #16 sin holguras.', order: 5 },
+
+    // FORMWORK
+    { id: 'chk_form_1', act: 'FORMWORK', sec: '1. Material y Estado', text: 'Paneles de encofrado (metálicos/madera) limpios, rectos y sin deformaciones previas.', order: 1 },
+    { id: 'chk_form_2', act: 'FORMWORK', sec: '2. Geometría y Cota', text: 'Dimensiones internas y cotas del encofrado conformes al plano (desviación ≤ 0.5 cm).', order: 2 },
+    { id: 'chk_form_3', act: 'FORMWORK', sec: '2. Geometría y Cota', text: 'Alineamiento y verticalidad verificados con plomada y nivel (tolerancia ≤ 5 mm).', order: 3 },
+    { id: 'chk_form_4', act: 'FORMWORK', sec: '3. Estanqueidad', text: 'Juntas selladas para evitar fuga de lechada durante el vaciado y vibrado.', order: 4 },
+    { id: 'chk_form_5', act: 'FORMWORK', sec: '4. Preparación', text: 'Desmoldante aplicado homogéneamente y fondo libre de aserrín o basura antes del vaciado.', order: 5 },
+
+    // CONCRETE
+    { id: 'chk_conc_1', act: 'CONCRETE', sec: '1. Autorización Previa', text: 'Liberación previa firmada de Topografía, Acero y Encofrado antes de autorizar el vaciado.', order: 1 },
+    { id: 'chk_conc_2', act: 'CONCRETE', sec: '2. Despacho Planta', text: 'Guía de remisión del proveedor (Concreto Titán / Carmix) verificada con volumen y resistencia f\'c.', order: 2 },
+    { id: 'chk_conc_3', act: 'CONCRETE', sec: '3. Ensayo de Cono', text: 'Prueba de asentamiento (Slump de Abrams) realizada por mixer dentro de 3.5" a 5.0".', order: 3 },
+    { id: 'chk_conc_4', act: 'CONCRETE', sec: '4. Muestreo de Probetas', text: 'Moldeo de 4 probetas cilíndricas por mixer en moldes normalizados con rotulado indeleble.', order: 4 },
+    { id: 'chk_conc_5', act: 'CONCRETE', sec: '5. Colocación y Vibrado', text: 'Vibrado mecánico adecuado sin tocar el acero de refuerzo ni producir segregación.', order: 5 },
+    { id: 'chk_conc_6', act: 'CONCRETE', sec: '6. Curado', text: 'Aplicación inmediata de curador químico y/o mantas de yute húmedas según EG-2013.', order: 6 }
+  ];
+
+  for (const item of checklistItems) {
+    insertChecklistTemplate.run(item.id, PILOT_PROJECT_ID, item.act, item.sec, item.text, item.order, null, 1);
+  }
+
+  // 5. Seed Pilot Activity Schedule for R10 demo
   const insertSchedule = db.prepare(`
     INSERT OR REPLACE INTO protocol_schedules (id, project_id, activity, panel, chainage, scheduled_at, notified_overdue_at)
     VALUES (?, ?, ?, ?, ?, ?, ?)

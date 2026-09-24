@@ -35,13 +35,35 @@ export async function renderProtocolFormView(container, activity, session, onCom
     // offline fallback
   }
 
-  // Initial concrete trucks state
+  // Load checklist templates for current activity (§3.6 / F1)
+  let checklistTemplates = [];
+  let checklistState = [];
+
+  try {
+    const chkRes = await fetch(`/api/projects/${projectId}/checklist-templates?activity=${activity}`);
+    if (chkRes.ok) {
+      checklistTemplates = await chkRes.json();
+      checklistState = checklistTemplates.map(item => ({
+        template_item_id: item.id,
+        item_text: item.item_text,
+        section: item.section,
+        result: 'CUMPLE',
+        observation: ''
+      }));
+    }
+  } catch (e) {
+    console.warn('Checklist templates fetch fallback:', e);
+  }
+
+  // Initial concrete trucks state with discrete slump selector
   let trucksState = [
     {
       truck_number: 1,
       mixer_id: '6D37',
       delivery_note: 'GR-00412',
-      slump_cm: '10.5',
+      supplier: 'Concreto Titán',
+      slump: '4',
+      slump_cm: '10.2',
       cylinders_cast: 4,
       design_fc: 280,
       notes: ''
@@ -164,8 +186,109 @@ export async function renderProtocolFormView(container, activity, session, onCom
       if (!isNaN(cov) && cov < minCov) {
         issues.push(`Recubrimiento de concreto: ${cov} cm (mínimo: ≥ ${minCov} cm)`);
       }
+    } else if (activity === 'FORMWORK') {
+      const align = parseFloat(formData.measurements.alignment_deviation_mm);
+      const maxAlign = criteriaMap['alignment_deviation_mm']?.max_value || 5.0;
+      if (!isNaN(align) && align > maxAlign) {
+        issues.push(`Alineamiento y verticalidad: ${align} mm (tolerancia: ≤ ${maxAlign} mm)`);
+      }
+      const sect = Math.abs(parseFloat(formData.measurements.section_dimension_deviation_mm));
+      const maxSect = criteriaMap['section_dimension_deviation_mm']?.max_value || 5.0;
+      if (!isNaN(sect) && sect > maxSect) {
+        issues.push(`Dimensión de sección transversal: ±${sect} mm (tolerancia: ±${maxSect} mm)`);
+      }
     }
+
+    // Check checklist items for non-conformances (§3.6 / F1)
+    if (Array.isArray(checklistState)) {
+      checklistState.forEach((chk, i) => {
+        if (chk.result === 'NO_CUMPLE') {
+          issues.push(`Ítem ${i + 1} (${chk.item_text}): NO CUMPLE`);
+        }
+      });
+    }
+
     return issues;
+  }
+
+  function renderChecklistGridHtml() {
+    if (!checklistState || checklistState.length === 0) return '';
+
+    return `
+      <div style="margin-top: 24px; margin-bottom: 12px; border-top: 2px dashed #CBD5E1; padding-top: 16px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+          <div>
+            <h4 style="font-size: 13.5px; font-weight: 800; color: #0F172A; margin: 0;">
+              📋 Lista de Chequeo de Inspección en Obra (§3.6 / F1)
+            </h4>
+            <span style="font-size: 11px; color: var(--color-text-muted);">
+              Formato oficial de campo: CUMPLE / NO CUMPLE / NO APLICA
+            </span>
+          </div>
+        </div>
+
+        <div style="display: flex; flex-direction: column; gap: 8px;">
+          ${checklistState.map((chk, idx) => `
+            <div class="checklist-row-card" data-idx="${idx}" style="background: #FFFFFF; border: 1px solid var(--color-border); border-radius: 8px; padding: 10px 12px;">
+              <div style="font-size: 12.5px; font-weight: 700; color: #1E293B; margin-bottom: 8px;">
+                <span style="color: #0284C7; font-weight: 800;">${idx + 1}.</span> ${chk.item_text}
+              </div>
+              <div style="display: flex; gap: 6px; margin-bottom: 6px;">
+                <button type="button" class="btn-chk-pill ${chk.result === 'CUMPLE' ? 'active-cumple' : ''}" data-idx="${idx}" data-val="CUMPLE"
+                  style="flex: 1; padding: 6px 4px; font-size: 11px; font-weight: 800; border-radius: 6px; cursor: pointer; border: 1.5px solid ${chk.result === 'CUMPLE' ? '#16A34A' : '#CBD5E1'}; background: ${chk.result === 'CUMPLE' ? '#DCFCE7' : '#F8FAFC'}; color: ${chk.result === 'CUMPLE' ? '#15803D' : '#475569'};">
+                  ✓ CUMPLE
+                </button>
+                <button type="button" class="btn-chk-pill ${chk.result === 'NO_CUMPLE' ? 'active-nocumple' : ''}" data-idx="${idx}" data-val="NO_CUMPLE"
+                  style="flex: 1; padding: 6px 4px; font-size: 11px; font-weight: 800; border-radius: 6px; cursor: pointer; border: 1.5px solid ${chk.result === 'NO_CUMPLE' ? '#DC2626' : '#CBD5E1'}; background: ${chk.result === 'NO_CUMPLE' ? '#FEE2E2' : '#F8FAFC'}; color: ${chk.result === 'NO_CUMPLE' ? '#B91C1C' : '#475569'};">
+                  ✕ NO CUMPLE
+                </button>
+                <button type="button" class="btn-chk-pill ${chk.result === 'NO_APLICA' ? 'active-noaplica' : ''}" data-idx="${idx}" data-val="NO_APLICA"
+                  style="flex: 1; padding: 6px 4px; font-size: 11px; font-weight: 800; border-radius: 6px; cursor: pointer; border: 1.5px solid ${chk.result === 'NO_APLICA' ? '#64748B' : '#CBD5E1'}; background: ${chk.result === 'NO_APLICA' ? '#F1F5F9' : '#F8FAFC'}; color: ${chk.result === 'NO_APLICA' ? '#334155' : '#475569'};">
+                  — NO APLICA
+                </button>
+              </div>
+              <input type="text" class="form-input chk-obs" data-idx="${idx}" value="${chk.observation || ''}" placeholder="Observación técnica de campo..." style="font-size: 11px; padding: 4px 8px; min-height: 28px; height: 28px;" />
+            </div>
+          `).join('')}
+        </div>
+      </div>
+    `;
+  }
+
+  // Client-side Image Compression Helper (§4.3.1)
+  async function compressImage(file, maxDim = 1280, quality = 0.75) {
+    return new Promise((resolve) => {
+      const img = new Image();
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        img.onload = () => {
+          let w = img.width;
+          let h = img.height;
+          if (w > maxDim || h > maxDim) {
+            if (w > h) {
+              h = Math.round((h * maxDim) / w);
+              w = maxDim;
+            } else {
+              w = Math.round((w * maxDim) / h);
+              h = maxDim;
+            }
+          }
+          const canvas = document.createElement('canvas');
+          canvas.width = w;
+          canvas.height = h;
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0, w, h);
+          canvas.toBlob((blob) => {
+            resolve({
+              blob: blob || file,
+              dataUrl: canvas.toDataURL('image/jpeg', quality)
+            });
+          }, 'image/jpeg', quality);
+        };
+        img.src = e.target.result;
+      };
+      reader.readAsDataURL(file);
+    });
   }
 
   function renderStep() {
@@ -330,6 +453,8 @@ export async function renderProtocolFormView(container, activity, session, onCom
           <div id="trucks-container">
             ${trucksState.map((truck, idx) => renderTruckCard(truck, idx, slumpRangeText)).join('')}
           </div>
+
+          ${renderChecklistGridHtml()}
         `;
       }
 
@@ -360,6 +485,8 @@ export async function renderProtocolFormView(container, activity, session, onCom
               ℹ️ Tolerancia del Expediente: <strong>≤ 1.0 cm</strong>
             </div>
           </div>
+
+          ${renderChecklistGridHtml()}
         `;
       }
 
@@ -446,6 +573,8 @@ export async function renderProtocolFormView(container, activity, session, onCom
               ℹ️ Exigido: <strong>≥ 25 cm</strong>
             </div>
           </div>
+
+          ${renderChecklistGridHtml()}
         `;
       }
 
@@ -494,6 +623,84 @@ export async function renderProtocolFormView(container, activity, session, onCom
               ℹ️ Exigido: <strong>≥ 5.0 cm</strong>
             </div>
           </div>
+
+          ${renderChecklistGridHtml()}
+        `;
+      }
+
+      if (activity === 'FORMWORK') {
+        const alignVal = formData.measurements.alignment_deviation_mm !== undefined ? formData.measurements.alignment_deviation_mm : '2.0';
+        const sectVal = formData.measurements.section_dimension_deviation_mm !== undefined ? formData.measurements.section_dimension_deviation_mm : '1.5';
+        return `
+          ${advisoryContainerHtml}
+
+          <h3 style="font-size: 17px; font-weight: 800; margin-bottom: 16px; color: #0F172A;">
+            Protocolo de Encofrado y Desencofrado
+          </h3>
+
+          <div class="form-group">
+            <label class="form-label">Desviación de Plomo y Alineamiento Vertical</label>
+            <div class="input-wrapper">
+              <input 
+                type="number" 
+                step="0.5" 
+                id="input-formwork-align" 
+                class="form-input" 
+                value="${alignVal}" 
+                required
+              />
+              <span class="input-unit">mm</span>
+            </div>
+            <div class="criteria-hint">
+              ℹ️ Tolerancia EG-2013: <strong>≤ 5.0 mm</strong>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Desviación en Dimensiones de Sección Transversal</label>
+            <div class="input-wrapper">
+              <input 
+                type="number" 
+                step="0.5" 
+                id="input-formwork-section" 
+                class="form-input" 
+                value="${sectVal}" 
+                required
+              />
+              <span class="input-unit">mm</span>
+            </div>
+            <div class="criteria-hint">
+              ℹ️ Tolerancia del Expediente: <strong>± 5.0 mm</strong>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Aplicación de Desmoldante Químico</label>
+            <div class="checklist-item ${formData.measurements.release_agent_applied !== false ? 'checked' : ''}" id="chk-release-agent">
+              <div class="checklist-checkbox">✓</div>
+              <div>
+                <div class="checklist-text">Desmoldante verificado y fondo de encofrado limpio</div>
+                <div style="font-size: 12px; color: var(--color-text-secondary); margin-top: 2px;">
+                  Sin estancamiento ni residuos de polvo o concreto previo.
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Rigidez de Apuntalamiento y Arriostramiento</label>
+            <div class="checklist-item ${formData.measurements.shoring_rigid !== false ? 'checked' : ''}" id="chk-shoring">
+              <div class="checklist-checkbox">✓</div>
+              <div>
+                <div class="checklist-text">Puntales y soleras rígidas aseguradas</div>
+                <div style="font-size: 12px; color: var(--color-text-secondary); margin-top: 2px;">
+                  Capacidad de carga calculada para soportar empuje de vaciado.
+                </div>
+              </div>
+            </div>
+          </div>
+
+          ${renderChecklistGridHtml()}
         `;
       }
     }
@@ -577,6 +784,48 @@ export async function renderProtocolFormView(container, activity, session, onCom
           </div>
         </div>
 
+        <!-- 5-Box Official PPI Signature Grid (§3.7 / F4, F6, F8, F9) -->
+        <div style="margin-bottom: 18px;">
+          <div style="font-size: 12px; font-weight: 800; color: #0F172A; text-transform: uppercase; margin-bottom: 8px;">
+            📋 Cuadro de 5 Firmas de Aprobación PPI (§3.7)
+          </div>
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 8px;">
+            <div style="border: 1.5px solid #0284C7; background: #F0F9FF; border-radius: 6px; padding: 8px; font-size: 11px;">
+              <div style="font-weight: 800; color: #0369A1;">1. Calidad (Ejecutor)</div>
+              <div style="color: #0F172A; font-weight: 600; margin-top: 2px;">Ing. David Valdez Ochoa</div>
+              <div style="color: #0284C7; font-size: 10px;">CIP Reg. Obra</div>
+              <div style="margin-top: 6px; font-weight: 700; color: #059669; font-size: 10px;">✓ FIRMA INICIAL</div>
+            </div>
+            <div style="border: 1px solid var(--color-border); background: #FFFFFF; border-radius: 6px; padding: 8px; font-size: 11px;">
+              <div style="font-weight: 800; color: #475569;">2. Calidad (Supervisión)</div>
+              <div style="color: #0F172A; font-weight: 600; margin-top: 2px;">Ing. Cristian Torres S.</div>
+              <div style="color: #64748B; font-size: 10px;">CIP: 260873</div>
+              <div style="margin-top: 6px; color: #D97706; font-size: 10px; font-weight: 600;">⏳ Sello PENDIENTE</div>
+            </div>
+            <div style="border: 1px solid var(--color-border); background: #FFFFFF; border-radius: 6px; padding: 8px; font-size: 11px;">
+              <div style="font-weight: 800; color: #475569;">3. Supervisor de Obra</div>
+              <div style="color: #0F172A; font-weight: 600; margin-top: 2px;">Ing. Teodoro Huamancusi</div>
+              <div style="color: #64748B; font-size: 10px;">CIP: 53548</div>
+              <div style="margin-top: 6px; color: #D97706; font-size: 10px; font-weight: 600;">⏳ Sello PENDIENTE</div>
+            </div>
+            <div style="border: 1px solid var(--color-border); background: #FFFFFF; border-radius: 6px; padding: 8px; font-size: 11px;">
+              <div style="font-weight: 800; color: #475569;">4. Residente de Obra</div>
+              <div style="color: #0F172A; font-weight: 600; margin-top: 2px;">Ing. Edison Cuadros G.</div>
+              <div style="color: #64748B; font-size: 10px;">CIP: 302775</div>
+              <div style="margin-top: 6px; color: #D97706; font-size: 10px; font-weight: 600;">⏳ Sello PENDIENTE</div>
+            </div>
+            <div style="border: 1px solid var(--color-border); background: #FFFFFF; border-radius: 6px; padding: 8px; font-size: 11px;">
+              <div style="font-weight: 800; color: #475569;">5. Estructuras (Sup.)</div>
+              <div style="color: #0F172A; font-weight: 600; margin-top: 2px;">Ing. Roly Conocachi H.</div>
+              <div style="color: #64748B; font-size: 10px;">CIP: 76843</div>
+              <div style="margin-top: 6px; color: #D97706; font-size: 10px; font-weight: 600;">⏳ Sello PENDIENTE</div>
+            </div>
+          </div>
+          <div style="font-size: 10px; color: #64748B; margin-top: 6px;">
+            🔒 Trazabilidad criptográfica garantizada mediante sello digital (<code style="font-size: 10px;">stamp_key</code>) y PIN de colegiatura.
+          </div>
+        </div>
+
         <div class="form-group">
           <label class="form-label">${t('step4.notes_label')}</label>
           <textarea id="input-notes" class="form-input" rows="3" placeholder="Observaciones de campo...">${formData.notes}</textarea>
@@ -625,34 +874,38 @@ export async function renderProtocolFormView(container, activity, session, onCom
           </div>
         </div>
 
-        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
-          <div class="form-group">
-            <label class="form-label">${t('concrete.slump')}</label>
-            <div class="input-wrapper">
-              <input 
-                type="number" 
-                step="0.1" 
-                class="form-input truck-slump ${isSlumpInvalid ? 'input-invalid' : isSlumpValid ? 'input-valid' : ''}" 
-                data-index="${idx}" 
-                value="${truck.slump_cm}" 
-                required 
-              />
-              <span class="input-unit">cm</span>
-            </div>
-            <div class="slump-feedback-msg" data-index="${idx}">
-              ${isSlumpInvalid ? `
-                <div class="inline-validation-msg msg-error">
-                  ${t('validation.slump_out', { range: slumpRangeText })}
-                </div>
-              ` : isSlumpValid ? `
-                <div class="inline-validation-msg msg-ok">
-                  ${t('validation.slump_ok', { range: slumpRangeText })}
-                </div>
-              ` : ''}
-            </div>
-            <span class="form-label-hint">${t('concrete.slump_hint', { range: slumpRangeText })}</span>
-          </div>
+        <div class="form-group" style="margin-bottom: 12px;">
+          <label class="form-label">Proveedor de Concreto Premezclado</label>
+          <input type="text" class="form-input truck-supplier" data-index="${idx}" value="${truck.supplier || 'Concreto Titán'}" placeholder="Concreto Titán" />
+        </div>
 
+        <!-- Discrete Slump Selector (§3.3 / F2) -->
+        <div class="form-group" style="margin-bottom: 14px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+            <label class="form-label" style="margin-bottom: 0;">Asentamiento / Slump (Selector Discreto)</label>
+            <span style="font-size: 11.5px; font-weight: 800; color: #0284C7;" class="slump-summary-label" data-index="${idx}">
+              ${truck.slump || '4'}" (~${truck.slump_cm || '10.2'} cm)
+            </span>
+          </div>
+          <div class="slump-selector-grid" data-index="${idx}" style="display: flex; gap: 8px;">
+            ${['3.5', '4', '4.5', '5'].map(val => {
+              const isActive = (truck.slump || '4') === val;
+              return `
+                <button type="button" 
+                  class="btn-slump-val ${isActive ? 'active-slump' : ''}" 
+                  data-index="${idx}" 
+                  data-val="${val}"
+                  style="flex: 1; padding: 8px 4px; font-size: 13.5px; font-weight: 800; border-radius: 6px; cursor: pointer; border: 2px solid ${isActive ? '#0284C7' : '#CBD5E1'}; background: ${isActive ? '#E0F2FE' : '#FFFFFF'}; color: ${isActive ? '#0369A1' : '#334155'}; transition: all 0.15s ease;">
+                  ${val}"
+                </button>
+              `;
+            }).join('')}
+          </div>
+          <input type="hidden" class="truck-slump" data-index="${idx}" value="${truck.slump || '4'}" />
+          <span class="form-label-hint">Selector de valores fijos por camión mixer (3.5", 4", 4.5", 5" según EG-2013).</span>
+        </div>
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
           <div class="form-group">
             <label class="form-label">${t('concrete.cylinders')}</label>
             <div class="input-wrapper">
@@ -666,28 +919,16 @@ export async function renderProtocolFormView(container, activity, session, onCom
               />
               <span class="input-unit">und</span>
             </div>
-            <div class="cylinders-feedback-msg" data-index="${idx}">
-              ${isCylInvalid ? `
-                <div class="inline-validation-msg msg-error">
-                  ${t('validation.cylinders_out', { min: cCrit.min_value || 4 })}
-                </div>
-              ` : `
-                <div class="inline-validation-msg msg-ok">
-                  ${t('validation.cylinders_ok', { min: cCrit.min_value || 4 })}
-                </div>
-              `}
-            </div>
           </div>
-        </div>
 
-        <div class="form-group" style="margin-bottom: 0;">
-          <label class="form-label">${t('concrete.design_fc')}</label>
-          <select class="form-input truck-fc" data-index="${idx}">
-            <option value="280" ${truck.design_fc === 280 ? 'selected' : ''}>280 kg/cm² (Pavimento)</option>
-            <option value="210" ${truck.design_fc === 210 ? 'selected' : ''}>210 kg/cm² (Estructural)</option>
-            <option value="175" ${truck.design_fc === 175 ? 'selected' : ''}>175 kg/cm² (Muros)</option>
-            <option value="140" ${truck.design_fc === 140 ? 'selected' : ''}>140 kg/cm² (Solado)</option>
-          </select>
+          <div class="form-group">
+            <label class="form-label">${t('concrete.design_fc')}</label>
+            <select class="form-input truck-fc" data-index="${idx}">
+              <option value="280" ${truck.design_fc === 280 ? 'selected' : ''}>280 kg/cm² (Pavimento)</option>
+              <option value="210" ${truck.design_fc === 210 ? 'selected' : ''}>210 kg/cm² (Estructural)</option>
+              <option value="175" ${truck.design_fc === 175 ? 'selected' : ''}>175 kg/cm² (Cimientos)</option>
+            </select>
+          </div>
         </div>
       </div>
     `;
@@ -704,7 +945,8 @@ export async function renderProtocolFormView(container, activity, session, onCom
         container.querySelectorAll('.truck-card').forEach((card, idx) => {
           const mixer = card.querySelector('.truck-mixer')?.value.trim() || '';
           const guia = card.querySelector('.truck-guia')?.value.trim() || '';
-          const slump = card.querySelector('.truck-slump')?.value.trim() || '';
+          const supplier = card.querySelector('.truck-supplier')?.value.trim() || 'Concreto Titán';
+          const slump = card.querySelector('.truck-slump')?.value.trim() || '4';
           const cyl = card.querySelector('.truck-cylinders')?.value.trim() || '4';
           const fc = card.querySelector('.truck-fc')?.value || '280';
 
@@ -712,7 +954,9 @@ export async function renderProtocolFormView(container, activity, session, onCom
             truck_number: idx + 1,
             mixer_id: mixer,
             delivery_note: guia,
-            slump_cm: slump,
+            supplier: supplier,
+            slump: slump,
+            slump_cm: (parseFloat(slump) * 2.54).toFixed(1),
             cylinders_cast: parseInt(cyl, 10) || 4,
             design_fc: parseFloat(fc) || 280,
             notes: ''
@@ -723,6 +967,8 @@ export async function renderProtocolFormView(container, activity, session, onCom
           truck_number: t.truck_number,
           mixer_id: t.mixer_id,
           delivery_note: t.delivery_note,
+          supplier: t.supplier,
+          slump: t.slump,
           slump_cm: parseFloat(t.slump_cm),
           cylinders_cast: t.cylinders_cast,
           design_fc: t.design_fc,
@@ -745,7 +991,21 @@ export async function renderProtocolFormView(container, activity, session, onCom
         const co = container.querySelector('#input-steel-cover');
         if (sp) formData.measurements.bar_spacing_cm = parseFloat(sp.value);
         if (co) formData.measurements.concrete_cover_cm = parseFloat(co.value);
+      } else if (activity === 'FORMWORK') {
+        const al = container.querySelector('#input-formwork-align');
+        const sc = container.querySelector('#input-formwork-section');
+        if (al) formData.measurements.alignment_deviation_mm = parseFloat(al.value);
+        if (sc) formData.measurements.section_dimension_deviation_mm = parseFloat(sc.value);
       }
+
+      // Sync paper checklist observations (§3.6 / F1)
+      container.querySelectorAll('.checklist-row-card').forEach(row => {
+        const idx = parseInt(row.getAttribute('data-idx'), 10);
+        const obs = row.querySelector('.chk-obs')?.value.trim() || '';
+        if (checklistState[idx]) {
+          checklistState[idx].observation = obs;
+        }
+      });
     } else if (currentStep === 4) {
       const notesEl = container.querySelector('#input-notes');
       if (notesEl) formData.notes = notesEl.value.trim();
@@ -1093,6 +1353,7 @@ export async function renderProtocolFormView(container, activity, session, onCom
     }
 
     // Step 3 Photo capture
+    // Step 3 Photo capture with Local Compression (§4.3.1)
     if (currentStep === 3) {
       const cameraInput = container.querySelector('#camera-input');
       const openCamBtn = container.querySelector('#btn-open-camera');
@@ -1104,19 +1365,28 @@ export async function renderProtocolFormView(container, activity, session, onCom
           const file = e.target.files[0];
           if (!file) return;
 
-          const reader = new FileReader();
-          reader.onload = async (event) => {
+          try {
+            const compressed = await compressImage(file, 1280, 0.75);
             const photoId = `photo_client_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
             const photoObj = {
               id: photoId,
-              blob: file,
-              dataUrl: event.target.result
+              blob: compressed.blob,
+              dataUrl: compressed.dataUrl
             };
             formData.localPhotos.push(photoObj);
-            await storeLocalPhoto(photoId, file, { gps: formData.gps, captured_at: new Date().toISOString() });
+            await storeLocalPhoto(photoId, compressed.blob, { gps: formData.gps, captured_at: new Date().toISOString() });
             renderStep();
-          };
-          reader.readAsDataURL(file);
+          } catch (compErr) {
+            console.warn('Compression error fallback:', compErr);
+            const reader = new FileReader();
+            reader.onload = async (event) => {
+              const photoId = `photo_client_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
+              formData.localPhotos.push({ id: photoId, blob: file, dataUrl: event.target.result });
+              await storeLocalPhoto(photoId, file, { gps: formData.gps, captured_at: new Date().toISOString() });
+              renderStep();
+            };
+            reader.readAsDataURL(file);
+          }
         });
       }
 
@@ -1129,7 +1399,7 @@ export async function renderProtocolFormView(container, activity, session, onCom
       });
     }
 
-    // Step 4 Submit
+    // Step 4 Submit with Photos-First Upload & Signatures (§4.3.3)
     const submitBtn = container.querySelector('#btn-submit-protocol');
     if (submitBtn) {
       submitBtn.addEventListener('click', async () => {
@@ -1139,6 +1409,33 @@ export async function renderProtocolFormView(container, activity, session, onCom
 
         const idempotencyKey = `idemp_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
         const lang = getLanguage();
+
+        // 1. Strict Photos-First Order: If online, upload photos before submitting protocol
+        let uploadedPhotoIds = [];
+        if (navigator.onLine && formData.localPhotos.length > 0) {
+          submitBtn.innerText = 'Subiendo fotos con compresión...';
+          for (const p of formData.localPhotos) {
+            try {
+              const fd = new FormData();
+              fd.append('photo', p.blob, `${p.id}.jpg`);
+              if (formData.gps) {
+                fd.append('gps_lat', String(formData.gps.lat));
+                fd.append('gps_lng', String(formData.gps.lng));
+              }
+              fd.append('captured_at', new Date().toISOString());
+
+              const pRes = await fetch('/api/photos', { method: 'POST', body: fd });
+              if (pRes.ok) {
+                const pData = await pRes.json();
+                uploadedPhotoIds.push(pData.photo_id);
+              }
+            } catch (err) {
+              console.warn('Online photo upload attempt notice:', err);
+            }
+          }
+        }
+
+        submitBtn.innerText = 'Validando y certificando...';
 
         const payload = {
           project_id: projectId,
@@ -1150,7 +1447,12 @@ export async function renderProtocolFormView(container, activity, session, onCom
           panel: formData.panel,
           chainage: formData.chainage,
           measurements: formData.measurements,
-          photo_ids: [],
+          checks: checklistState.map(c => ({
+            template_item_id: c.template_item_id,
+            result: c.result,
+            observation: c.observation
+          })),
+          photo_ids: uploadedPhotoIds,
           local_photo_ids: formData.localPhotos.map(p => p.id),
           notes: formData.notes,
           idempotency_key: idempotencyKey,

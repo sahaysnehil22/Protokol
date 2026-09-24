@@ -50,19 +50,52 @@ export function initializeSchema(db: DatabaseSync): void {
     CREATE TABLE IF NOT EXISTS criteria (
       id TEXT PRIMARY KEY,
       project_id TEXT NOT NULL,
-      activity TEXT NOT NULL, -- CONCRETE | SURVEY | COMPACTION | STEEL
+      activity TEXT NOT NULL, -- CONCRETE | SURVEY | COMPACTION | STEEL | FORMWORK
       field TEXT NOT NULL,
-      operator TEXT NOT NULL, -- BETWEEN | GTE | LTE | EQ
+      operator TEXT NOT NULL, -- BETWEEN | GTE | LTE | EQ | IN
       min_value REAL,
       max_value REAL,
+      allowed_values TEXT, -- JSON array of allowed discrete values, e.g. ["3.5","4","4.5","5"]
       expected_value TEXT,
       unit TEXT,
       source_reference TEXT NOT NULL,
+      hold_point INTEGER NOT NULL DEFAULT 0,
       is_active INTEGER NOT NULL DEFAULT 1,
       FOREIGN KEY (project_id) REFERENCES projects(id)
     );
 
     CREATE INDEX IF NOT EXISTS idx_criteria_lookup ON criteria(project_id, activity, field, is_active);
+
+    -- 3.1 Checklist Templates Table (F1 Paper Format Checklist as Data)
+    CREATE TABLE IF NOT EXISTS checklist_templates (
+      id TEXT PRIMARY KEY,
+      project_id TEXT NOT NULL,
+      activity TEXT NOT NULL, -- CONCRETE | SURVEY | COMPACTION | STEEL | FORMWORK
+      section TEXT NOT NULL,
+      item_text TEXT NOT NULL,
+      item_order INTEGER NOT NULL,
+      applicable_if TEXT,
+      version INTEGER NOT NULL DEFAULT 1,
+      active INTEGER NOT NULL DEFAULT 1,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      FOREIGN KEY (project_id) REFERENCES projects(id)
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_checklist_templates ON checklist_templates(project_id, activity, item_order);
+
+    -- 3.2 Protocol Checks Table (Answers per checklist item)
+    CREATE TABLE IF NOT EXISTS protocol_checks (
+      id TEXT PRIMARY KEY,
+      protocol_id TEXT NOT NULL,
+      template_item_id TEXT NOT NULL,
+      result TEXT NOT NULL, -- CUMPLE | NO_CUMPLE | NO_APLICA
+      observation TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      FOREIGN KEY (protocol_id) REFERENCES protocols(id),
+      FOREIGN KEY (template_item_id) REFERENCES checklist_templates(id)
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_protocol_checks ON protocol_checks(protocol_id, template_item_id);
 
     -- 4. Photos Table (Decoupled Opaque Photo Storage)
     CREATE TABLE IF NOT EXISTS photos (
@@ -98,6 +131,8 @@ export function initializeSchema(db: DatabaseSync): void {
       technician_id TEXT NOT NULL,
       device_token TEXT NOT NULL,
       integrity_hash TEXT NOT NULL,
+      pdf_key TEXT,
+      subcontractor_id TEXT,
       notes TEXT,
       supersedes_protocol_id TEXT,     -- Linked revision chain
       idempotency_key TEXT UNIQUE,     -- Offline sync duplicate prevention
@@ -143,6 +178,26 @@ export function initializeSchema(db: DatabaseSync): void {
       END;
     END;
 
+    -- 5.1 Signatures Table (F4, F6, F8, F9 Signature Grid per Protocol)
+    CREATE TABLE IF NOT EXISTS signatures (
+      id TEXT PRIMARY KEY,
+      protocol_id TEXT NOT NULL,
+      signatory_id TEXT,
+      signatory_name TEXT NOT NULL,
+      role TEXT NOT NULL,
+      sign_order INTEGER NOT NULL,
+      cip_number TEXT,
+      status TEXT NOT NULL DEFAULT 'PENDING', -- PENDING | SIGNED | EXEMPT
+      signed_at TEXT,
+      signature_key TEXT,
+      stamp_key TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      FOREIGN KEY (protocol_id) REFERENCES protocols(id),
+      FOREIGN KEY (signatory_id) REFERENCES technicians(id)
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_signatures_protocol ON signatures(protocol_id, sign_order);
+
     -- 6. Concrete Trucks Table (v2.4 Multi-Truck Pour Architecture)
     CREATE TABLE IF NOT EXISTS concrete_trucks (
       id TEXT PRIMARY KEY, -- trk_...
@@ -150,7 +205,9 @@ export function initializeSchema(db: DatabaseSync): void {
       truck_number INTEGER NOT NULL,
       mixer_id TEXT NOT NULL,
       delivery_note TEXT NOT NULL,
-      slump_cm REAL NOT NULL,
+      slump TEXT, -- discrete: "3.5" | "4" | "4.5" | "5"
+      slump_cm REAL,
+      supplier TEXT DEFAULT 'Concreto Titán',
       cylinders_cast INTEGER NOT NULL DEFAULT 4,
       design_fc REAL NOT NULL,
       slump_verdict TEXT NOT NULL, -- PASS | FAIL
@@ -288,6 +345,27 @@ function runSafeMigrations(db: DatabaseSync): void {
     if (!cylCols.has('truck_id')) db.exec(`ALTER TABLE cylinders ADD COLUMN truck_id TEXT;`);
     if (!cylCols.has('truck_number')) db.exec(`ALTER TABLE cylinders ADD COLUMN truck_number INTEGER;`);
     if (!cylCols.has('specimen_number')) db.exec(`ALTER TABLE cylinders ADD COLUMN specimen_number INTEGER;`);
+  }
+
+  // Criteria table migrations
+  const critCols = getTableColumns('criteria');
+  if (critCols.size > 0) {
+    if (!critCols.has('allowed_values')) db.exec(`ALTER TABLE criteria ADD COLUMN allowed_values TEXT;`);
+    if (!critCols.has('hold_point')) db.exec(`ALTER TABLE criteria ADD COLUMN hold_point INTEGER NOT NULL DEFAULT 0;`);
+  }
+
+  // Protocols table migrations
+  const protCols = getTableColumns('protocols');
+  if (protCols.size > 0) {
+    if (!protCols.has('pdf_key')) db.exec(`ALTER TABLE protocols ADD COLUMN pdf_key TEXT;`);
+    if (!protCols.has('subcontractor_id')) db.exec(`ALTER TABLE protocols ADD COLUMN subcontractor_id TEXT;`);
+  }
+
+  // Concrete trucks table migrations
+  const truckCols = getTableColumns('concrete_trucks');
+  if (truckCols.size > 0) {
+    if (!truckCols.has('slump')) db.exec(`ALTER TABLE concrete_trucks ADD COLUMN slump TEXT;`);
+    if (!truckCols.has('supplier')) db.exec(`ALTER TABLE concrete_trucks ADD COLUMN supplier TEXT DEFAULT 'Concreto Titán';`);
   }
 
   // Nonconformances table migrations

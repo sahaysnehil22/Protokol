@@ -44,19 +44,49 @@ CREATE INDEX IF NOT EXISTS idx_technicians_device ON technicians(device_token);
 CREATE TABLE IF NOT EXISTS criteria (
     id TEXT PRIMARY KEY,
     project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
-    activity TEXT NOT NULL, -- CONCRETE | SURVEY | COMPACTION | STEEL
+    activity TEXT NOT NULL, -- CONCRETE | SURVEY | COMPACTION | STEEL | FORMWORK
     field TEXT NOT NULL,
-    operator TEXT NOT NULL, -- BETWEEN | GTE | LTE | EQ
+    operator TEXT NOT NULL, -- BETWEEN | GTE | LTE | EQ | IN
     min_value NUMERIC,
     max_value NUMERIC,
+    allowed_values JSONB, -- Discrete allowed values: ["3.5","4","4.5","5"]
     expected_value TEXT,
     unit TEXT,
     source_reference TEXT NOT NULL,
+    hold_point BOOLEAN NOT NULL DEFAULT FALSE,
     is_active INTEGER NOT NULL DEFAULT 1,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 CREATE INDEX IF NOT EXISTS idx_criteria_project_activity ON criteria(project_id, activity);
+
+-- 3.1 Checklist Templates Table (F1 Paper Format Checklist as Data)
+CREATE TABLE IF NOT EXISTS checklist_templates (
+    id TEXT PRIMARY KEY,
+    project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+    activity TEXT NOT NULL, -- CONCRETE | SURVEY | COMPACTION | STEEL | FORMWORK
+    section TEXT NOT NULL,
+    item_text TEXT NOT NULL,
+    item_order INTEGER NOT NULL,
+    applicable_if TEXT,
+    version INTEGER NOT NULL DEFAULT 1,
+    active INTEGER NOT NULL DEFAULT 1,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_checklist_templates ON checklist_templates(project_id, activity, item_order);
+
+-- 3.2 Protocol Checks Table (Answers per checklist item)
+CREATE TABLE IF NOT EXISTS protocol_checks (
+    id TEXT PRIMARY KEY,
+    protocol_id TEXT NOT NULL REFERENCES protocols(id) ON DELETE CASCADE,
+    template_item_id TEXT NOT NULL REFERENCES checklist_templates(id) ON DELETE CASCADE,
+    result TEXT NOT NULL, -- CUMPLE | NO_CUMPLE | NO_APLICA
+    observation TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_protocol_checks ON protocol_checks(protocol_id, template_item_id);
 
 -- 4. Photos Metadata Table (Opaque Identifiers)
 CREATE TABLE IF NOT EXISTS photos (
@@ -79,7 +109,7 @@ CREATE INDEX IF NOT EXISTS idx_photos_protocol ON photos(protocol_id);
 CREATE TABLE IF NOT EXISTS protocols (
     id TEXT PRIMARY KEY, -- PRT-YYYYMMDD-HHMM-NNN
     project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
-    activity TEXT NOT NULL, -- CONCRETE | SURVEY | COMPACTION | STEEL
+    activity TEXT NOT NULL, -- CONCRETE | SURVEY | COMPACTION | STEEL | FORMWORK
     chainage TEXT NOT NULL,
     panel TEXT NOT NULL,
     verdict TEXT NOT NULL, -- PASS | FAIL | PROVISIONAL_PASS
@@ -90,6 +120,8 @@ CREATE TABLE IF NOT EXISTS protocols (
     gps_lng NUMERIC NOT NULL,
     recorded_at TIMESTAMPTZ NOT NULL,
     integrity_hash TEXT NOT NULL,
+    pdf_key TEXT,
+    subcontractor_id TEXT,
     supersedes_protocol_id TEXT REFERENCES protocols(id),
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
@@ -99,6 +131,24 @@ CREATE INDEX IF NOT EXISTS idx_protocols_activity ON protocols(activity);
 CREATE INDEX IF NOT EXISTS idx_protocols_chainage ON protocols(chainage);
 CREATE INDEX IF NOT EXISTS idx_protocols_verdict ON protocols(verdict);
 
+-- 5.1 Signatures Table (F4, F6, F8, F9 Signature Grid per Protocol)
+CREATE TABLE IF NOT EXISTS signatures (
+    id TEXT PRIMARY KEY,
+    protocol_id TEXT NOT NULL REFERENCES protocols(id) ON DELETE CASCADE,
+    signatory_id TEXT REFERENCES technicians(id),
+    signatory_name TEXT NOT NULL,
+    role TEXT NOT NULL,
+    sign_order INTEGER NOT NULL,
+    cip_number TEXT,
+    status TEXT NOT NULL DEFAULT 'PENDING', -- PENDING | SIGNED | EXEMPT
+    signed_at TIMESTAMPTZ,
+    signature_key TEXT,
+    stamp_key TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_signatures_protocol ON signatures(protocol_id, sign_order);
+
 -- 6. Concrete Ready-Mix Trucks Table (v2.4 Multi-Truck Pour Architecture)
 CREATE TABLE IF NOT EXISTS concrete_trucks (
     id TEXT PRIMARY KEY, -- trk_...
@@ -106,7 +156,9 @@ CREATE TABLE IF NOT EXISTS concrete_trucks (
     truck_number INTEGER NOT NULL,
     mixer_id TEXT NOT NULL,
     delivery_note TEXT NOT NULL,
-    slump_cm NUMERIC NOT NULL,
+    slump TEXT, -- Discrete selector: "3.5" | "4" | "4.5" | "5"
+    slump_cm NUMERIC,
+    supplier TEXT DEFAULT 'Concreto Titán',
     cylinders_cast INTEGER NOT NULL DEFAULT 4,
     design_fc NUMERIC NOT NULL,
     slump_verdict TEXT NOT NULL, -- PASS | FAIL

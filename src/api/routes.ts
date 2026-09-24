@@ -39,6 +39,7 @@ export function createApiRouter(db: DatabaseSync): Router {
         chainage,
         measurements,
         photo_ids,
+        checks,
         notes,
         idempotency_key,
         lang
@@ -62,6 +63,7 @@ export function createApiRouter(db: DatabaseSync): Router {
         chainage,
         measurements,
         photo_ids,
+        checks,
         notes,
         idempotency_key
       }, (lang as SupportedLanguage) || 'es');
@@ -234,8 +236,8 @@ export function createApiRouter(db: DatabaseSync): Router {
       // Insert custom criteria if provided
       if (Array.isArray(criteria) && criteria.length > 0) {
         const insertCrit = db.prepare(`
-          INSERT INTO criteria (id, project_id, activity, field, operator, min_value, max_value, expected_value, unit, source_reference, is_active)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          INSERT INTO criteria (id, project_id, activity, field, operator, min_value, max_value, allowed_values, expected_value, unit, source_reference, hold_point, is_active)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `);
 
         for (const c of criteria) {
@@ -248,9 +250,11 @@ export function createApiRouter(db: DatabaseSync): Router {
             c.operator,
             c.min_value !== undefined ? c.min_value : null,
             c.max_value !== undefined ? c.max_value : null,
+            c.allowed_values ? (typeof c.allowed_values === 'string' ? c.allowed_values : JSON.stringify(c.allowed_values)) : null,
             c.expected_value || null,
             c.unit || null,
             c.source_reference || 'Expediente Técnico',
+            c.hold_point ? 1 : 0,
             c.is_active !== undefined ? c.is_active : 1
           );
         }
@@ -478,6 +482,74 @@ export function createApiRouter(db: DatabaseSync): Router {
   router.get('/protocols/:id/cylinders', (req: Request, res: Response) => {
     const cylinders = db.prepare(`SELECT * FROM cylinders WHERE protocol_id = ? ORDER BY truck_number ASC, age_days ASC`).all(req.params.id as string);
     return res.status(200).json(cylinders);
+  });
+
+  // Checklist templates endpoint (§3.6 / F1)
+  router.get('/projects/:id/checklist-templates', (req: Request, res: Response) => {
+    try {
+      const projectId = req.params.id as string;
+      const activity = req.query.activity as string | undefined;
+      const templates = protocolService.getChecklistTemplates(projectId, activity);
+      return res.status(200).json(templates);
+    } catch (err: any) {
+      return res.status(500).json({ error: 'DB_ERROR', message: err.message });
+    }
+  });
+
+  // Protocol checks endpoint (F1)
+  router.get('/protocols/:id/checks', (req: Request, res: Response) => {
+    try {
+      const checks = protocolService.getProtocolChecks(req.params.id as string);
+      return res.status(200).json(checks);
+    } catch (err: any) {
+      return res.status(500).json({ error: 'DB_ERROR', message: err.message });
+    }
+  });
+
+  // Protocol signatures endpoint (F4, F8, F9)
+  router.get('/protocols/:id/signatures', (req: Request, res: Response) => {
+    try {
+      const sigs = protocolService.getProtocolSignatures(req.params.id as string);
+      return res.status(200).json(sigs);
+    } catch (err: any) {
+      return res.status(500).json({ error: 'DB_ERROR', message: err.message });
+    }
+  });
+
+  // Protocol sign endpoint (F4, F8, F9)
+  router.post('/protocols/:id/sign', async (req: Request, res: Response) => {
+    try {
+      const protocolId = req.params.id as string;
+      const { signatory_id, pin, signature_data, stamp_data } = req.body;
+
+      if (!signatory_id || !pin) {
+        return res.status(400).json({
+          error: 'MISSING_FIELDS',
+          message: 'signatory_id y pin son requeridos para firmar el protocolo.'
+        });
+      }
+
+      const sigRecord = await protocolService.signProtocol(protocolId, {
+        signatory_id,
+        pin,
+        signature_data,
+        stamp_data
+      });
+
+      return res.status(200).json({
+        success: true,
+        ...sigRecord,
+        signature: sigRecord
+      });
+    } catch (err: any) {
+      if (err.message.includes('INVALID_PIN')) {
+        return res.status(401).json({ error: 'INVALID_PIN', message: err.message });
+      }
+      if (err.message.includes('NOT_FOUND')) {
+        return res.status(404).json({ error: 'NOT_FOUND', message: err.message });
+      }
+      return res.status(500).json({ error: 'SIGN_ERROR', message: err.message });
+    }
   });
 
   // ==========================================

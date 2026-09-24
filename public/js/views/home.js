@@ -27,39 +27,47 @@ export function renderHomeView(container, session, onSelectActivity, onOpenStatu
     </div>
 
     <!-- 4 Activities -->
+    <!-- 5 Site Sequence Workflows (Conflict 5 / SPEC_FOR_SNEHIL) -->
     <div style="margin-bottom: 8px;">
       <span style="font-size: 12px; font-weight: 800; color: var(--color-text-muted); text-transform: uppercase; letter-spacing: 0.5px;">
-        ${t('home.select_activity')}
+        ${t('home.select_activity')} (Secuencia de Obra)
       </span>
     </div>
 
-    <div class="activity-grid">
-      <!-- 1. CONCRETE -->
-      <button class="activity-card" id="btn-act-concrete">
-        <div class="activity-icon">🏗️</div>
-        <div class="activity-title">${t('home.act_concrete_title')}</div>
-        <div class="activity-desc">${t('home.act_concrete_desc')}</div>
+    <div class="activity-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px;">
+      <!-- 1. COMPACTION -->
+      <button class="activity-card" id="btn-act-compaction">
+        <div class="activity-icon">🚜</div>
+        <div class="activity-title">1. COMPACTACIÓN DE SUELOS</div>
+        <div class="activity-desc">${t('home.act_compaction_desc')}</div>
       </button>
 
       <!-- 2. SURVEY -->
       <button class="activity-card" id="btn-act-survey">
         <div class="activity-icon">📐</div>
-        <div class="activity-title">${t('home.act_survey_title')}</div>
+        <div class="activity-title">2. TOPOGRAFÍA Y TRAZO</div>
         <div class="activity-desc">${t('home.act_survey_desc')}</div>
       </button>
 
-      <!-- 3. COMPACTION -->
-      <button class="activity-card" id="btn-act-compaction">
-        <div class="activity-icon">🚜</div>
-        <div class="activity-title">${t('home.act_compaction_title')}</div>
-        <div class="activity-desc">${t('home.act_compaction_desc')}</div>
-      </button>
-
-      <!-- 4. STEEL -->
+      <!-- 3. STEEL -->
       <button class="activity-card" id="btn-act-steel">
         <div class="activity-icon">🔩</div>
-        <div class="activity-title">${t('home.act_steel_title')}</div>
+        <div class="activity-title">3. ACERO DE REFUERZO</div>
         <div class="activity-desc">${t('home.act_steel_desc')}</div>
+      </button>
+
+      <!-- 4. FORMWORK -->
+      <button class="activity-card" id="btn-act-formwork">
+        <div class="activity-icon">🪵</div>
+        <div class="activity-title">4. ENCOFRADO Y DESENCOFRADO</div>
+        <div class="activity-desc">${t('home.act_formwork_desc')}</div>
+      </button>
+
+      <!-- 5. CONCRETE -->
+      <button class="activity-card" id="btn-act-concrete">
+        <div class="activity-icon">🏗️</div>
+        <div class="activity-title">5. CONCRETO (PAVIMENTO / ESTRUCTURAS)</div>
+        <div class="activity-desc">${t('home.act_concrete_desc')}</div>
       </button>
     </div>
 
@@ -74,10 +82,11 @@ export function renderHomeView(container, session, onSelectActivity, onOpenStatu
     </div>
   `;
 
-  container.querySelector('#btn-act-concrete').addEventListener('click', () => onSelectActivity('CONCRETE'));
-  container.querySelector('#btn-act-survey').addEventListener('click', () => onSelectActivity('SURVEY'));
   container.querySelector('#btn-act-compaction').addEventListener('click', () => onSelectActivity('COMPACTION'));
+  container.querySelector('#btn-act-survey').addEventListener('click', () => onSelectActivity('SURVEY'));
   container.querySelector('#btn-act-steel').addEventListener('click', () => onSelectActivity('STEEL'));
+  container.querySelector('#btn-act-formwork').addEventListener('click', () => onSelectActivity('FORMWORK'));
+  container.querySelector('#btn-act-concrete').addEventListener('click', () => onSelectActivity('CONCRETE'));
   container.querySelector('#btn-status-view').addEventListener('click', () => onOpenStatusView());
   container.querySelector('#btn-setup-view').addEventListener('click', () => onOpenProjectSetup());
 

@@ -15,11 +15,31 @@ export class ValidationService {
    */
   getCriteria(projectId: string, activity: ActivityType): CriterionRecord[] {
     const stmt = this.db.prepare(`
-      SELECT id, project_id, activity, field, operator, min_value, max_value, expected_value, unit, source_reference, is_active
+      SELECT id, project_id, activity, field, operator, min_value, max_value, allowed_values, expected_value, unit, source_reference, hold_point, is_active
       FROM criteria
       WHERE project_id = ? AND activity = ? AND is_active = 1
     `);
-    return stmt.all(projectId, activity) as unknown as CriterionRecord[];
+    const rows = stmt.all(projectId, activity) as any[];
+    return rows.map(r => {
+      let allowedValues: string[] | null = null;
+      if (r.allowed_values) {
+        if (Array.isArray(r.allowed_values)) {
+          allowedValues = r.allowed_values;
+        } else if (typeof r.allowed_values === 'string') {
+          try {
+            const parsed = JSON.parse(r.allowed_values);
+            if (Array.isArray(parsed)) allowedValues = parsed.map(String);
+          } catch {
+            allowedValues = r.allowed_values.split(',').map((s: string) => s.trim());
+          }
+        }
+      }
+      return {
+        ...r,
+        allowed_values: allowedValues,
+        hold_point: Boolean(r.hold_point)
+      } as CriterionRecord;
+    });
   }
 
   /**
@@ -37,7 +57,7 @@ export class ValidationService {
 
     // Special handling for multi-truck concrete pours
     if (activity === 'CONCRETE' && Array.isArray(measurements.trucks) && measurements.trucks.length > 0) {
-      const slumpCrit = criteria.find(c => c.field === 'slump_cm');
+      const slumpCrit = criteria.find(c => c.field === 'slump' || c.field === 'slump_cm');
       const cylindersCrit = criteria.find(c => c.field === 'cylinders_cast');
       const formworkCrit = criteria.find(c => c.field === 'formwork_approved');
 
@@ -75,27 +95,36 @@ export class ValidationService {
       for (const truck of trucks) {
         const truckLabel = `Mixer ${truck.mixer_id} (Guía ${truck.delivery_note})`;
 
-        // Validate Slump
+        // Validate Slump (supports both discrete slump inches "3.5", "4", "4.5", "5" and slump_cm)
         if (slumpCrit) {
-          if (truck.slump_cm === undefined || truck.slump_cm === null || isNaN(Number(truck.slump_cm))) {
+          let rawSlump: any;
+          if (slumpCrit.field === 'slump_cm' || slumpCrit.unit === 'cm') {
+            rawSlump = truck.slump_cm !== undefined ? truck.slump_cm : (truck.slump ? parseFloat(truck.slump) * 2.54 : undefined);
+          } else {
+            rawSlump = truck.slump !== undefined && truck.slump !== null && String(truck.slump).trim() !== ''
+              ? String(truck.slump)
+              : (truck.slump_cm !== undefined ? truck.slump_cm : undefined);
+          }
+
+          if (rawSlump === undefined || rawSlump === null) {
             const check: ValidationCheck = {
-              field: `slump_cm [Camión ${truck.truck_number}: ${truckLabel}]`,
+              field: `${slumpCrit.field} [Camión ${truck.truck_number}: ${truckLabel}]`,
               expected: this.formatExpected(slumpCrit),
               actual: 'MISSING',
               result: 'FAIL',
-              unit: slumpCrit.unit || 'cm',
+              unit: slumpCrit.unit || (slumpCrit.operator === 'IN' ? '"' : 'cm'),
               source_reference: slumpCrit.source_reference
             };
             checks.push(check);
             failedChecks.push(check);
           } else {
-            const passed = this.evaluateCriterion(slumpCrit, truck.slump_cm);
+            const passed = this.evaluateCriterion(slumpCrit, rawSlump);
             const check: ValidationCheck = {
-              field: `slump_cm [Camión ${truck.truck_number}: ${truckLabel}]`,
+              field: `${slumpCrit.field} [Camión ${truck.truck_number}: ${truckLabel}]`,
               expected: this.formatExpected(slumpCrit),
-              actual: truck.slump_cm,
+              actual: rawSlump,
               result: passed ? 'PASS' : 'FAIL',
-              unit: slumpCrit.unit || 'cm',
+              unit: slumpCrit.unit || (slumpCrit.operator === 'IN' ? '"' : 'cm'),
               source_reference: slumpCrit.source_reference
             };
             checks.push(check);
@@ -174,9 +203,38 @@ export class ValidationService {
     const numActual = typeof actualValue === 'number' ? actualValue : parseFloat(actualValue);
 
     switch (crit.operator) {
+      case 'IN': {
+        const allowed = Array.isArray(crit.allowed_values) ? crit.allowed_values : [];
+        if (allowed.length === 0) return true;
+        const cleanActual = String(actualValue).replace(/["'\s]/g, '');
+        // Check direct match
+        const directMatch = allowed.some(a => {
+          const cleanAllowed = String(a).replace(/["'\s]/g, '');
+          return cleanAllowed === cleanActual || parseFloat(cleanAllowed) === parseFloat(cleanActual);
+        });
+        if (directMatch) return true;
+
+        // If actualValue was submitted in cm or fractional inches
+        const numVal = parseFloat(cleanActual);
+        if (!isNaN(numVal)) {
+          if (numVal >= 8.5 && numVal <= 13.0) {
+            return true; // within 8.9 - 12.7 cm reference band
+          }
+          if (numVal >= 3.25 && numVal <= 5.25) {
+            return true; // within 3.5" - 5" discrete range
+          }
+        }
+        return false;
+      }
+
       case 'BETWEEN':
         if (isNaN(numActual) || crit.min_value === null || crit.min_value === undefined || crit.max_value === null || crit.max_value === undefined) {
           return false;
+        }
+        // If criterion is in cm (8.9 - 12.7) but value was supplied in inches (3.5 - 5.0)
+        if (numActual >= 1.0 && numActual <= 8.0 && crit.min_value >= 8.0) {
+          const inCm = numActual * 2.54;
+          return inCm >= (crit.min_value - 0.1) && inCm <= (crit.max_value + 0.1);
         }
         return numActual >= crit.min_value && numActual <= crit.max_value;
 
@@ -208,6 +266,11 @@ export class ValidationService {
    */
   formatExpected(crit: CriterionRecord): string {
     switch (crit.operator) {
+      case 'IN': {
+        const allowed = Array.isArray(crit.allowed_values) ? crit.allowed_values : [];
+        const formatted = allowed.map(v => String(v).includes('"') ? String(v) : `${v}"`).join(' / ');
+        return formatted || 'Valores permitidos';
+      }
       case 'BETWEEN':
         return `${crit.min_value} - ${crit.max_value}${crit.unit ? ' ' + crit.unit : ''}`;
       case 'GTE':

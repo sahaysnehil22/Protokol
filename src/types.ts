@@ -1,7 +1,7 @@
 // PROTOKOL Phase 0 Domain Types
-// Source: Technical Product Document v2.2 (September 2026)
+// Source: Technical Product Document v2.4 (September 2026) & SPEC_FOR_SNEHIL.md
 
-export type ActivityType = 'CONCRETE' | 'SURVEY' | 'COMPACTION' | 'STEEL';
+export type ActivityType = 'COMPACTION' | 'SURVEY' | 'STEEL' | 'FORMWORK' | 'CONCRETE';
 
 export type ProtocolVerdict = 'PASS' | 'PROVISIONAL_PASS' | 'FAIL';
 
@@ -47,13 +47,57 @@ export interface CriterionRecord {
   project_id: string;
   activity: ActivityType;
   field: string;
-  operator: 'BETWEEN' | 'GTE' | 'LTE' | 'EQ';
+  operator: 'BETWEEN' | 'GTE' | 'LTE' | 'EQ' | 'IN';
   min_value?: number | null;
   max_value?: number | null;
+  allowed_values?: string[] | null;
   expected_value?: string | null;
   unit?: string | null;
   source_reference: string;
+  hold_point?: boolean;
   is_active: number;
+}
+
+export interface ChecklistTemplateItem {
+  id: string;
+  project_id: string;
+  activity: ActivityType;
+  section: string;
+  item_text: string;
+  item_order: number;
+  applicable_if?: string | null;
+  version: number;
+  active: number;
+}
+
+export interface ProtocolCheckItem {
+  id: string;
+  protocol_id: string;
+  template_item_id: string;
+  result: 'CUMPLE' | 'NO_CUMPLE' | 'NO_APLICA';
+  observation?: string;
+  created_at?: string;
+}
+
+export interface ProtocolSignatureRecord {
+  id: string;
+  protocol_id: string;
+  signatory_id?: string | null;
+  signatory_name: string;
+  role: string;
+  sign_order: number;
+  cip_number?: string | null;
+  status: 'PENDING' | 'SIGNED' | 'EXEMPT';
+  signed_at?: string | null;
+  signature_key?: string | null;
+  stamp_key?: string | null;
+}
+
+export interface SignProtocolRequest {
+  signatory_id: string;
+  pin: string;
+  signature_data?: string;
+  stamp_data?: string;
 }
 
 export interface ProtocolRecord {
@@ -88,6 +132,19 @@ export interface ProtocolSubmissionRequest {
   panel: string;
   chainage: string;
   measurements: Record<string, any>;
+  checks?: Array<{
+    template_item_id: string;
+    result: 'CUMPLE' | 'NO_CUMPLE' | 'NO_APLICA';
+    observation?: string;
+  }>;
+  signatures?: Array<{
+    role: string;
+    signatory_name: string;
+    cip_number?: string;
+    status?: 'PENDING' | 'SIGNED' | 'EXEMPT';
+    signature_key?: string;
+    stamp_key?: string;
+  }>;
   photo_ids?: string[];
   notes?: string;
   idempotency_key?: string;
@@ -97,6 +154,8 @@ export interface ProtocolSubmissionResponse {
   protocol_id: string;
   verdict: ProtocolVerdict;
   checks: ValidationCheck[];
+  checks_items?: ProtocolCheckItem[];
+  signatures?: ProtocolSignatureRecord[];
   nonconformance_id: string | null;
   pdf_url: string;
   pending: string[];
@@ -215,7 +274,9 @@ export interface ConcreteTruckInput {
   truck_number: number;
   mixer_id: string;
   delivery_note: string;
-  slump_cm: number;
+  slump?: string; // Discrete selector: "3.5" | "4" | "4.5" | "5" (inches, F2)
+  slump_cm?: number; // Kept for backwards compatibility
+  supplier?: string;
   cylinders_cast?: number;
   design_fc?: number;
   notes?: string;
@@ -227,7 +288,9 @@ export interface ConcreteTruckRecord {
   truck_number: number;
   mixer_id: string;
   delivery_note: string;
-  slump_cm: number;
+  slump?: string;
+  slump_cm?: number;
+  supplier?: string;
   cylinders_cast: number;
   design_fc: number;
   slump_verdict: CheckResult;

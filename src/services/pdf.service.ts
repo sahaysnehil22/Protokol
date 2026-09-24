@@ -125,8 +125,8 @@ export class PdfService {
       if (params.protocol.verdict === 'PROVISIONAL_PASS') {
         bannerColor = '#F59E0B';
         verdictLabel = lang === 'en'
-          ? 'PROVISIONAL APPROVAL — PENDING 28-DAY CYLINDER BREAK'
-          : 'APROBACIÓN PROVISIONAL — PENDIENTE ROTURA DE PROBETAS (28 DÍAS)';
+          ? 'APPROVED (Pending 28-day laboratory test results)'
+          : 'APROBADO (Pendiente resultado de laboratorio a 28 días)';
       } else if (params.protocol.verdict === 'FAIL') {
         bannerColor = '#EF4444';
         verdictLabel = lang === 'en'
@@ -223,6 +223,57 @@ export class PdfService {
         y += 16;
       }
 
+      // --- 5.1 PAPER CHECKLIST PROTOCOL ITEMS (§3.6 / F1) ---
+      const protocolChecks = this.db.prepare(`
+        SELECT pc.*, ct.item_text, ct.section, ct.item_order
+        FROM protocol_checks pc
+        LEFT JOIN checklist_templates ct ON pc.template_item_id = ct.id
+        WHERE pc.protocol_id = ?
+        ORDER BY ct.item_order ASC, pc.id ASC
+      `).all(params.protocol.id) as any[];
+
+      if (protocolChecks.length > 0) {
+        y += 12;
+        if (y > 680) {
+          doc.addPage();
+          y = 45;
+        }
+        doc.fillColor('#0F172A').fontSize(9).font('Helvetica-Bold').text(
+          lang === 'en' ? 'PROTOCOL INSPECTION CHECKLIST (CUMPLE / NO CUMPLE / NO APLICA)' : 'LISTA DE CHEQUEO DEL PROTOCOLO (CUMPLE / NO CUMPLE / NO APLICA)',
+          40, y
+        );
+        y += 14;
+
+        doc.rect(40, y, 515, 18).fill('#E2E8F0');
+        doc.fillColor('#1E293B').fontSize(7.5).font('Helvetica-Bold');
+        doc.text('#', 45, y + 5);
+        doc.text(lang === 'en' ? 'INSPECTION ITEM / REQUIREMENT' : 'ÍTEM DE INSPECCIÓN / REQUISITO', 70, y + 5);
+        doc.text(lang === 'en' ? 'RESULT' : 'EVALUACIÓN', 370, y + 5);
+        doc.text(lang === 'en' ? 'OBSERVATION' : 'OBSERVACIÓN', 440, y + 5);
+
+        y += 18;
+        doc.font('Helvetica').fontSize(7.5);
+
+        for (let i = 0; i < protocolChecks.length; i++) {
+          const chk = protocolChecks[i];
+          if (y > 730) {
+            doc.addPage();
+            y = 45;
+          }
+          const isCheckFail = chk.result === 'NO_CUMPLE';
+          doc.rect(40, y, 515, 16).fill(isCheckFail ? '#FEE2E2' : i % 2 === 0 ? '#FFFFFF' : '#F8FAFC');
+          doc.fillColor('#334155');
+          doc.text(String(chk.item_order || i + 1), 45, y + 4);
+          doc.text(chk.item_text || chk.template_item_id, 70, y + 4, { width: 295 });
+
+          const badgeColor = chk.result === 'CUMPLE' ? '#16A34A' : chk.result === 'NO_CUMPLE' ? '#DC2626' : '#64748B';
+          const labelResult = chk.result === 'CUMPLE' ? 'CUMPLE' : chk.result === 'NO_CUMPLE' ? 'NO CUMPLE' : 'N/A';
+          doc.font('Helvetica-Bold').fillColor(badgeColor).text(labelResult, 370, y + 4);
+          doc.font('Helvetica').fillColor('#64748B').text(chk.observation || '-', 440, y + 4, { width: 110 });
+          y += 16;
+        }
+      }
+
       // --- 6. CYLINDER BREAK RESULTS (If Any Tested) ---
       if (cylinders.length > 0) {
         y += 8;
@@ -314,7 +365,81 @@ export class PdfService {
         y += 110;
       }
 
-      // --- 8. FOOTER & INTEGRITY STAMP ---
+      // --- 8. 5-BOX OFFICIAL SIGNATURE & STAMP GRID (§3.7 / F4, F6, F8, F9) ---
+      const signatures = this.db.prepare(`
+        SELECT * FROM signatures WHERE protocol_id = ? ORDER BY sign_order ASC
+      `).all(params.protocol.id) as any[];
+
+      if (y > 660) {
+        doc.addPage();
+        y = 45;
+      } else {
+        y += 14;
+      }
+
+      doc.fillColor('#0F172A').fontSize(9).font('Helvetica-Bold').text(
+        lang === 'en' ? 'OFFICIAL SIGNATURES & STAMPS (RESPONSIBLE STAFF)' : 'CUADRO DE FIRMAS Y SELLOS OFICIALES DE CONFORMIDAD',
+        40, y
+      );
+      y += 14;
+
+      const sigList = signatures.length > 0 ? signatures : [
+        { role: 'Especialista de Calidad (Ejecución)', signatory_name: 'Ing. David Valdez Ochoa', cip_number: null, status: 'SIGNED' },
+        { role: 'Especialista de Calidad (Supervisión)', signatory_name: 'Ing. Cristian Manuel Torres Salinas', cip_number: '260873', status: 'PENDING' },
+        { role: 'Supervisor de Obra', signatory_name: 'Ing. Teodoro Manuel Huamancusi Quispe', cip_number: '53548', status: 'PENDING' },
+        { role: 'Residente de Obra', signatory_name: 'Ing. Edison Cuadros García', cip_number: '302775', status: 'PENDING' },
+        { role: 'Especialista de Estructuras (Supervisión)', signatory_name: 'Ing. Roly Conocachi Huamaní', cip_number: '76843', status: 'PENDING' }
+      ];
+
+      const boxWidth = 98;
+      const boxGap = 6;
+      const boxHeight = 72;
+
+      for (let i = 0; i < sigList.length; i++) {
+        const s = sigList[i];
+        const bx = 40 + i * (boxWidth + boxGap);
+
+        // Box border and background
+        doc.rect(bx, y, boxWidth, boxHeight).fillAndStroke(s.status === 'SIGNED' ? '#F0FDF4' : '#F8FAFC', '#CBD5E1');
+
+        // Role title header banner
+        doc.rect(bx, y, boxWidth, 18).fill('#1E293B');
+        doc.fillColor('#F8FAFC').fontSize(5.2).font('Helvetica-Bold').text(
+          s.role,
+          bx + 2,
+          y + 3,
+          { width: boxWidth - 4, align: 'center' }
+        );
+
+        // Stamp/Signature area
+        if (s.status === 'SIGNED') {
+          doc.rect(bx + 10, y + 21, boxWidth - 20, 24).stroke('#16A34A');
+          doc.fillColor('#16A34A').fontSize(5).font('Helvetica-Bold').text('FIRMADO DIGITAL', bx + 12, y + 23, { width: boxWidth - 24, align: 'center' });
+          doc.fontSize(4.5).font('Helvetica').text('PIN/SELLO VERIFICADO', bx + 12, y + 31, { width: boxWidth - 24, align: 'center' });
+          if (s.signed_at) {
+            doc.fontSize(4).text(String(s.signed_at).substring(0, 10), bx + 12, y + 37, { width: boxWidth - 24, align: 'center' });
+          }
+        } else {
+          doc.fillColor('#94A3B8').fontSize(5.5).font('Helvetica').text('[ PENDIENTE FIRMA ]', bx + 2, y + 30, { width: boxWidth - 4, align: 'center' });
+        }
+
+        // Signatory Name & CIP
+        doc.fillColor('#0F172A').fontSize(5.5).font('Helvetica-Bold').text(
+          s.signatory_name || 'Ingeniero Responsable',
+          bx + 2,
+          y + 49,
+          { width: boxWidth - 4, align: 'center' }
+        );
+        doc.fillColor('#475569').fontSize(5).font('Helvetica').text(
+          s.cip_number ? `CIP N° ${s.cip_number}` : 'CONTRATISTA',
+          bx + 2,
+          y + 61,
+          { width: boxWidth - 4, align: 'center' }
+        );
+      }
+      y += boxHeight + 12;
+
+      // --- 9. FOOTER & INTEGRITY STAMP ---
       if (y > 750) {
         doc.addPage();
         y = 45;

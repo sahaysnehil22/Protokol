@@ -35,8 +35,10 @@ const translations = {
     'home.act_compaction_desc': 'Densidad in-situ (≥100% Proctor Modificado), humedad y espesor de capas base/sub-base.',
     'home.act_steel_title': '4. ACERO',
     'home.act_steel_desc': 'Armadura de refuerzo, espaciamiento entre varillas y recubrimiento mínimo.',
+    'home.act_formwork_title': 'ENCOFRADO Y DESENCOFRADO',
+    'home.act_formwork_desc': 'Alineamiento, verticalidad, estanqueidad de juntas, desmoldante y apuntalamiento rígido.',
     'home.btn_status_view': '📊 Vista de Estado del Especialista de Calidad →',
-    'home.btn_project_config': '⚙️ Configuración / Nuevo Proyecto →',
+    'home.btn_project_config': '📋 Información General del Proyecto →',
 
     // Identify View
     'identify.title': 'Identificación de Campo',
@@ -160,9 +162,9 @@ const translations = {
     'status.record_break_title': 'Registrar Rotura de Probeta (Laboratorio)',
     'status.record_break_btn': 'Registrar Rotura Lab →',
 
-    // Project Setup View
-    'setup.title': 'Configuración y Creación de Proyecto',
-    'setup.subtitle': 'Cree o configure parámetros y criterios específicos de cada obra.',
+    // Project Setup View (F5)
+    'setup.title': 'Información General del Proyecto',
+    'setup.subtitle': 'Datos del contrato, entidad pública, ubicación del tramo y registro de profesionales responsables con CIP.',
     'setup.back': '← Volver',
     'setup.id': 'ID del Proyecto (Código Único)',
     'setup.id_hint': 'Ejemplo: AY-728-001 o CUST-2026-02',
@@ -215,8 +217,10 @@ const translations = {
     'home.act_compaction_desc': 'In-situ density (≥100% Modified Proctor), moisture deviation, and sub-base/base thickness.',
     'home.act_steel_title': '4. REINFORCING STEEL',
     'home.act_steel_desc': 'Rebar placement, spacing tolerance, and minimum concrete cover.',
+    'home.act_formwork_title': 'FORMWORK & STRIPPING',
+    'home.act_formwork_desc': 'Alignment, plumbness, joint tightness, form release agent, and rigid shoring.',
     'home.btn_status_view': '📊 Quality Manager Status View →',
-    'home.btn_project_config': '⚙️ Configuration / New Project →',
+    'home.btn_project_config': '📋 General Project Information →',
 
     // Identify View
     'identify.title': 'Field Technician Login',
@@ -340,9 +344,9 @@ const translations = {
     'status.record_break_title': 'Record Cylinder Break (Laboratory)',
     'status.record_break_btn': 'Submit Lab Result →',
 
-    // Project Setup View
-    'setup.title': 'Project Configuration & Setup',
-    'setup.subtitle': 'Create or customize contract details, sampling rules, and technical criteria.',
+    // Project Setup View (F5)
+    'setup.title': 'General Project Information',
+    'setup.subtitle': 'Contract details, public entity, road section location, and licensed engineers roster with CIP.',
     'setup.back': '← Back',
     'setup.id': 'Project ID (Unique Code)',
     'setup.id_hint': 'Example: AY-728-001 or PROJECT-B',

@@ -59,17 +59,30 @@ export async function syncOfflineQueue() {
 
   for (const item of pending) {
     try {
-      // 1. Synchronize any local photos attached to this protocol
+      // 1. Strict Photos-First Order (§4.3.3): All local photos must be uploaded first
       const serverPhotoIds = [];
+      let allPhotosUploaded = true;
+
       if (item.local_photo_ids && item.local_photo_ids.length > 0) {
         for (const localId of item.local_photo_ids) {
           try {
             const serverId = await syncPhoto(localId);
-            if (serverId) serverPhotoIds.push(serverId);
+            if (serverId) {
+              serverPhotoIds.push(serverId);
+            } else {
+              allPhotosUploaded = false;
+            }
           } catch (e) {
             console.warn(`[SYNC] Error subiendo foto ${localId}:`, e);
+            allPhotosUploaded = false;
+            break; // Stop and retry later
           }
         }
+      }
+
+      if (!allPhotosUploaded) {
+        console.warn(`[SYNC] Protocolo ${item.idempotency_key} postergado: faltan fotos por subir (§4.3.3 Photos-First).`);
+        continue;
       }
 
       // Merge server photo IDs with any existing photo IDs

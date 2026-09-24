@@ -19,32 +19,44 @@ export function renderProjectSetupView(container, onProjectCreated, onCancel) {
       </div>
 
       <form id="project-setup-form" novalidate>
-        <!-- 1. Identificación del Proyecto -->
+        <!-- 1. Información General del Proyecto (F5) -->
         <div style="font-size: 13px; font-weight: 800; color: #0284C7; text-transform: uppercase; margin-bottom: 12px;">
-          1. Información del Contrato
+          1. Información General del Proyecto
         </div>
 
         <div class="form-group">
           <label class="form-label">${t('setup.id')}</label>
-          <input type="text" id="proj-id" class="form-input" placeholder="PROY-2026-01" required />
+          <input type="text" id="proj-id" class="form-input" placeholder="AY-728-002" required />
           <span class="form-label-hint">${t('setup.id_hint')}</span>
         </div>
 
         <div class="form-group">
           <label class="form-label">${t('setup.name')}</label>
-          <input type="text" id="proj-name" class="form-input" placeholder="Mejoramiento Vial Tramo..." required />
+          <input type="text" id="proj-name" class="form-input" placeholder="Mejoramiento y Ampliación de Transitabilidad Tramo AY-728 a AY-729" required />
         </div>
 
         <div class="form-group">
           <label class="form-label">${t('setup.contract')}</label>
-          <input type="text" id="proj-contract" class="form-input" placeholder="N° 102-2026-GORE" required />
+          <input type="text" id="proj-contract" class="form-input" placeholder="N° 81-2026-GRA-SEDECENTRAL-OAPF" required />
         </div>
 
         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
           <div class="form-group">
             <label class="form-label">${t('setup.entity')}</label>
-            <input type="text" id="proj-entity" class="form-input" placeholder="Gobierno Regional" required />
+            <input type="text" id="proj-entity" class="form-input" placeholder="Gobierno Regional de Ayacucho" required />
           </div>
+          <div class="form-group">
+            <label class="form-label">Tipo de Proyecto</label>
+            <select id="proj-type" class="form-input">
+              <option value="Carretera / Infraestructura Vial" selected>Carretera / Infraestructura Vial</option>
+              <option value="Edificación Urbana / Inmobiliaria">Edificación Urbana / Inmobiliaria</option>
+              <option value="Puentes y Obras de Arte">Puentes y Obras de Arte</option>
+              <option value="Saneamiento e Hidráulica">Saneamiento e Hidráulica</option>
+            </select>
+          </div>
+        </div>
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
           <div class="form-group">
             <label class="form-label">${t('setup.mode')}</label>
             <select id="proj-mode" class="form-input">
@@ -52,71 +64,26 @@ export function renderProjectSetupView(container, onProjectCreated, onCancel) {
               <option value="Contrata">Por Contrata</option>
             </select>
           </div>
-        </div>
-
-        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
           <div class="form-group">
             <label class="form-label">${t('setup.location')}</label>
-            <input type="text" id="proj-location" class="form-input" placeholder="Huamanga, Ayacucho" />
+            <input type="text" id="proj-location" class="form-input" placeholder="Huamanga, Ayacucho, Perú" />
           </div>
-          <div class="form-group">
-            <label class="form-label">${t('setup.road_section')}</label>
-            <input type="text" id="proj-section" class="form-input" placeholder="km 0+000 a 5+200" />
-          </div>
-        </div>
-
-        <!-- 2. Parámetros de Control y Concreto -->
-        <div style="font-size: 13px; font-weight: 800; color: #0284C7; text-transform: uppercase; margin-top: 20px; margin-bottom: 12px;">
-          2. Criterios Técnicos de Concreto (Mixers y Probetas)
         </div>
 
         <div class="form-group">
-          <label class="form-label">${t('setup.cylinders_per_truck')}</label>
-          <div class="input-wrapper">
-            <input type="number" id="proj-cylinders" class="form-input" value="4" min="1" max="10" required />
-            <span class="input-unit">probetas / mixer</span>
-          </div>
-          <span class="form-label-hint">Cantidad obligatoria de testigos por cada mixer (v2.4 norma: 4 probetas).</span>
+          <label class="form-label">${t('setup.road_section')}</label>
+          <input type="text" id="proj-section" class="form-input" placeholder="Tramo AY-728 a AY-729 (km 0+000 a 2+380)" />
         </div>
 
-        <div class="form-group">
-          <label class="form-label">${t('setup.default_fc')}</label>
-          <select id="proj-fc-select" class="form-input" style="font-weight: 700; font-size: 15px;">
-            <option value="280">280 kg/cm² (Pavimento Rígido — Norma MTC)</option>
-            <option value="210">210 kg/cm² (Estructural / Zapatas / Vigas)</option>
-            <option value="175">175 kg/cm² (Muros y Cimientos)</option>
-            <option value="140">140 kg/cm² (Solados y Rellenos)</option>
-            <option value="245">245 kg/cm² (Puentes y Estructuras)</option>
-            <option value="315">315 kg/cm² (Vigas Postensadas)</option>
-            <option value="350">350 kg/cm² (Alta Resistencia)</option>
-            <option value="420">420 kg/cm² (Especial / Prefabricados)</option>
-            <option value="custom">✏️ Otro valor (Personalizado)...</option>
-          </select>
-          <div id="fc-custom-container" style="display: none; margin-top: 8px;">
-            <div class="input-wrapper">
-              <input type="number" id="proj-fc-custom" class="form-input" placeholder="Ej. 250" min="50" max="1000" step="5" style="font-size: 15px; font-weight: 700;" />
-              <span class="input-unit">kg/cm²</span>
-            </div>
-            <span class="form-label-hint">Ingrese el valor numérico exacto en kg/cm² especificado en el expediente.</span>
-          </div>
-          <span class="form-label-hint">Resistencia a la compresión requerida a los 28 días para la mezcla de concreto.</span>
-        </div>
-
-        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
-          <div class="form-group">
-            <label class="form-label">${t('setup.slump_min')}</label>
-            <input type="number" step="0.1" id="proj-slump-min" class="form-input" value="8.9" required />
-          </div>
-          <div class="form-group">
-            <label class="form-label">${t('setup.slump_max')}</label>
-            <input type="number" step="0.1" id="proj-slump-max" class="form-input" value="12.7" required />
-          </div>
-        </div>
-
-        <!-- 3. Equipo de Ingenieros y Especialistas del Proyecto -->
+        <!-- 2. Equipo de Ingenieros y Especialistas del Proyecto (F6 - Feeds PDF signature grid) -->
         <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 24px; margin-bottom: 12px; flex-wrap: wrap; gap: 8px;">
-          <div style="font-size: 13px; font-weight: 800; color: #0284C7; text-transform: uppercase;">
-            3. Equipo de Ingenieros y Especialistas (${t('nav.projects')})
+          <div>
+            <div style="font-size: 13px; font-weight: 800; color: #0284C7; text-transform: uppercase;">
+              2. Equipo de Ingenieros y Especialistas (Cuadro de Firmas PPI)
+            </div>
+            <div style="font-size: 11px; color: var(--color-text-secondary); margin-top: 2px;">
+              Este equipo alimenta directamente el cuadro oficial de firmas y sellos en los protocolos y el dosier final.
+            </div>
           </div>
           <button type="button" id="btn-add-tech-row" class="btn btn-outline" style="font-size: 11px; padding: 2px 10px; height: 28px; min-height: 28px;">
             + Agregar Ingeniero / Especialista
@@ -140,29 +107,41 @@ export function renderProjectSetupView(container, onProjectCreated, onCancel) {
   const errorDiv = container.querySelector('#setup-error');
   const rosterContainer = container.querySelector('#tech-roster-container');
   const addTechBtn = container.querySelector('#btn-add-tech-row');
-  const fcSelect = container.querySelector('#proj-fc-select');
-  const fcCustomContainer = container.querySelector('#fc-custom-container');
-  const fcCustomInput = container.querySelector('#proj-fc-custom');
-
-  if (fcSelect) {
-    fcSelect.addEventListener('change', () => {
-      if (fcSelect.value === 'custom') {
-        fcCustomContainer.style.display = 'block';
-        if (fcCustomInput) fcCustomInput.focus();
-      } else {
-        fcCustomContainer.style.display = 'none';
-        if (fcCustomInput) fcCustomInput.value = '';
-      }
-    });
-  }
-
   let engineersList = [
     {
-      name: '',
+      name: 'Ing. David Valdez Ochoa',
       role: 'Quality Specialist',
       cip: '',
       pin: '1234',
-      whatsapp: ''
+      whatsapp: '+51966000001'
+    },
+    {
+      name: 'Ing. Cristian Manuel Torres Salinas',
+      role: 'Quality Specialist',
+      cip: '260873',
+      pin: '1234',
+      whatsapp: '+51966000009'
+    },
+    {
+      name: 'Ing. Teodoro Manuel Huamancusi Quispe',
+      role: 'Supervisor',
+      cip: '53548',
+      pin: '1234',
+      whatsapp: '+51966000006'
+    },
+    {
+      name: 'Ing. Edison Cuadros Garcia',
+      role: 'Site Resident',
+      cip: '302775',
+      pin: '1234',
+      whatsapp: '+51966000002'
+    },
+    {
+      name: 'Ing. Roly Conocachi Huamani',
+      role: 'Structures Specialist',
+      cip: '76843',
+      pin: '1234',
+      whatsapp: '+51966000007'
     }
   ];
 
@@ -266,18 +245,10 @@ export function renderProjectSetupView(container, onProjectCreated, onCancel) {
       const execution_mode = container.querySelector('#proj-mode')?.value || 'Administración Directa';
       const location = container.querySelector('#proj-location')?.value.trim() || '';
       const road_section = container.querySelector('#proj-section')?.value.trim() || '';
-      
-      const cylindersInput = container.querySelector('#proj-cylinders');
-      const cylinders_per_truck = cylindersInput ? parseInt(cylindersInput.value, 10) : 4;
-
-      const slumpMinInput = container.querySelector('#proj-slump-min');
-      const slumpMaxInput = container.querySelector('#proj-slump-max');
-      const slump_min = slumpMinInput ? parseFloat(slumpMinInput.value) : NaN;
-      const slump_max = slumpMaxInput ? parseFloat(slumpMaxInput.value) : NaN;
 
       // Validate required project information
       if (!id) {
-        errorDiv.innerText = 'El Código / ID del Proyecto es obligatorio (ej. PROY-2026-01).';
+        errorDiv.innerText = 'El Código / ID del Proyecto es obligatorio (ej. AY-728-002).';
         errorDiv.style.display = 'block';
         container.querySelector('#proj-id')?.focus();
         return;
@@ -298,33 +269,6 @@ export function renderProjectSetupView(container, onProjectCreated, onCancel) {
         errorDiv.innerText = 'La Entidad Propietaria / Contratante es obligatoria.';
         errorDiv.style.display = 'block';
         container.querySelector('#proj-entity')?.focus();
-        return;
-      }
-
-      if (isNaN(cylinders_per_truck) || cylinders_per_truck < 1) {
-        errorDiv.innerText = 'La cantidad de probetas por mixer debe ser un número entero mayor o igual a 1.';
-        errorDiv.style.display = 'block';
-        cylindersInput?.focus();
-        return;
-      }
-
-      let default_design_fc;
-      if (fcSelect && fcSelect.value === 'custom') {
-        default_design_fc = parseFloat(fcCustomInput.value);
-        if (isNaN(default_design_fc) || default_design_fc < 50 || default_design_fc > 1000) {
-          errorDiv.innerText = 'El valor de f\'c personalizado debe ser un número válido entre 50 y 1000 kg/cm².';
-          errorDiv.style.display = 'block';
-          fcCustomInput?.focus();
-          return;
-        }
-      } else {
-        default_design_fc = fcSelect ? parseFloat(fcSelect.value) : 280;
-      }
-
-      if (isNaN(slump_min) || isNaN(slump_max) || slump_min >= slump_max) {
-        errorDiv.innerText = 'El asentamiento (slump) mínimo debe ser un número menor al slump máximo.';
-        errorDiv.style.display = 'block';
-        slumpMinInput?.focus();
         return;
       }
 
@@ -387,42 +331,21 @@ export function renderProjectSetupView(container, onProjectCreated, onCancel) {
         timezone_offset: '-05:00',
         whatsapp_recipients: recipients,
         sampling_basis: 'PER_TRUCK',
-        cylinders_per_truck,
-        default_design_fc,
+        cylinders_per_truck: 4,
+        default_design_fc: 280,
         criteria: [
-          {
-            activity: 'CONCRETE',
-            field: 'formwork_approved',
-            operator: 'EQ',
-            expected_value: 'true',
-            unit: 'checklist',
-            source_reference: 'Checklist Previo de Encofrado'
-          },
-          {
-            activity: 'CONCRETE',
-            field: 'slump_cm',
-            operator: 'BETWEEN',
-            min_value: slump_min,
-            max_value: slump_max,
-            unit: 'cm',
-            source_reference: 'Diseño de Mezclas Acreditado'
-          },
-          {
-            activity: 'CONCRETE',
-            field: 'cylinders_cast',
-            operator: 'GTE',
-            min_value: cylinders_per_truck,
-            unit: 'probetas/mixer',
-            source_reference: `Regla de Muestreo: ${cylinders_per_truck} probetas por mixer`
-          },
-          {
-            activity: 'CONCRETE',
-            field: 'design_fc',
-            operator: 'GTE',
-            min_value: default_design_fc,
-            unit: 'kg/cm²',
-            source_reference: 'Especificaciones Técnicas'
-          }
+          { activity: 'COMPACTION', field: 'compaction_pct', operator: 'GTE', min_value: 95.0, unit: '%', source_reference: 'MTC EG-2013 Tabla 300-01' },
+          { activity: 'SURVEY', field: 'elevation_dev_mm', operator: 'LTE', max_value: 10.0, unit: 'mm', source_reference: 'Expediente Técnico Topografía' },
+          { activity: 'STEEL', field: 'concrete_cover_cm', operator: 'GTE', min_value: 4.0, unit: 'cm', source_reference: 'NTE E.060 Cap. 7' },
+          { activity: 'STEEL', field: 'spacing_cm', operator: 'LTE', max_value: 20.0, unit: 'cm', source_reference: 'Plano de Estructuras' },
+          { activity: 'FORMWORK', field: 'surface_clean', operator: 'EQ', expected_value: 'true', unit: 'checklist', source_reference: 'EG-2013 Sec. 402' },
+          { activity: 'FORMWORK', field: 'release_agent_applied', operator: 'EQ', expected_value: 'true', unit: 'checklist', source_reference: 'EG-2013 Sec. 402' },
+          { activity: 'FORMWORK', field: 'alignment_mm', operator: 'LTE', max_value: 5.0, unit: 'mm', source_reference: 'Tolerancias EG-2013' },
+          { activity: 'FORMWORK', field: 'tightness_verified', operator: 'EQ', expected_value: 'true', unit: 'checklist', source_reference: 'EG-2013 Sec. 402' },
+          { activity: 'CONCRETE', field: 'formwork_approved', operator: 'EQ', expected_value: 'true', unit: 'checklist', source_reference: 'Checklist Previo de Encofrado' },
+          { activity: 'CONCRETE', field: 'slump', operator: 'IN', allowed_values: ['3.5', '4', '4.5', '5'], unit: 'pulgadas', source_reference: 'Requerimiento F2 Ing. David Valdez' },
+          { activity: 'CONCRETE', field: 'cylinders_cast', operator: 'GTE', min_value: 4, unit: 'probetas/mixer', source_reference: 'MTC v2.4 (4 probetas por mixer)' },
+          { activity: 'CONCRETE', field: 'design_fc', operator: 'GTE', min_value: 280, unit: 'kg/cm²', source_reference: 'Expediente Técnico Pavimento' }
         ],
         technicians: engineersList.map(e => ({
           name: e.name.trim(),
