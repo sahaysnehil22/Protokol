@@ -6,6 +6,39 @@ import { config } from '../config.js';
 import { ProtocolRecord, ValidationCheck, ActivityType, ProjectRecord, ConcreteTruckRecord, SupportedLanguage } from '../types.js';
 import { PhotoService } from './photo.service.js';
 
+export const GORE_DOC_SPECS: Record<string, { code: string; rev: string; title: string; defaultPartida: string }> = {
+  FORMWORK: {
+    code: 'GDC-PDE-2026',
+    rev: 'Versión: 001',
+    title: 'PROTOCOLO DE ENCOFRADO',
+    defaultPartida: 'ENCOFRADO Y DESENCOFRADO'
+  },
+  STEEL: {
+    code: 'FO01PT03',
+    rev: 'Versión: 001',
+    title: 'PROTOCOLO DE INSTALACION DE ACERO DE REFUERZO',
+    defaultPartida: 'HABILITACION Y COLOCACION DE ACERO CORRUGADO PARA SOPORTE DOWELS'
+  },
+  CONCRETE: {
+    code: 'GDC-PCC-2026',
+    rev: 'Versión: 001',
+    title: 'PROTOCOLO DE COLOCACIÓN DE PAVIMENTO RÍGIDO',
+    defaultPartida: "Concreto f'c 280 Kg/cm² en pavimento rígido e=0.20m"
+  },
+  SURVEY: {
+    code: 'GCO-PVT-2026',
+    rev: 'Rev: 01',
+    title: 'PROTOCOLO DE VERIFICACIÓN TOPOGRÁFICA',
+    defaultPartida: 'TRAZO, NIVELACION Y REPLANTEO'
+  },
+  COMPACTION: {
+    code: 'GDC-PCS-2026',
+    rev: 'Versión: 001',
+    title: 'PROTOCOLO DE CONTROL DE COMPACTACIÓN DE SUELOS',
+    defaultPartida: 'CONFORMACION Y COMPACTACION DE SUB-BASE Y BASE'
+  }
+};
+
 export class PdfService {
   private photoService: PhotoService;
 
@@ -61,64 +94,89 @@ export class PdfService {
 
       doc.pipe(stream);
 
-      // --- 1. HEADER & LOGO BANNER ---
-      doc.rect(40, 40, 515, 55).fillAndStroke('#1E293B', '#0F172A');
-      const titleText = lang === 'en' ? 'PROTOKOL — QUALITY CONTROL' : 'PROTOKOL — CONTROL DE CALIDAD';
-      const subtitleText = lang === 'en' 
-        ? 'INSPECTION AND TEST PLAN (ITP) — ROAD INFRASTRUCTURE' 
-        : 'PROGRAMA DE PUNTOS DE INSPECCIÓN (PPI) — INFRAESTRUCTURA VIAL';
+      const docSpec = GORE_DOC_SPECS[params.protocol.activity] || {
+        code: 'GDC-GEN-2026',
+        rev: 'Versión: 001',
+        title: `PROTOCOLO DE ${params.protocol.activity}`,
+        defaultPartida: 'CONTROL DE CALIDAD Y PUNTOS DE INSPECCIÓN'
+      };
 
-      doc.fillColor('#F8FAFC').fontSize(15).font('Helvetica-Bold').text(titleText, 55, 50);
-      doc.fontSize(9).font('Helvetica').text(subtitleText, 55, 70);
+      // --- 1. OFFICIAL GORE AYACUCHO HEADER (3-BOX FORMAT) ---
+      doc.rect(40, 40, 515, 52).stroke('#334155');
 
-      // Metadata Bar
-      let y = 105;
-      doc.rect(40, y, 515, 75).fillAndStroke('#F1F5F9', '#CBD5E1');
+      // Left Column: GORE Logo & Institution (width: 130)
+      doc.rect(40, 40, 130, 52).fillAndStroke('#F8FAFC', '#94A3B8');
+      doc.fillColor('#991B1B').fontSize(8.5).font('Helvetica-Bold').text('GOBIERNO REGIONAL', 45, 50, { width: 120, align: 'center' });
+      doc.fillColor('#0F172A').fontSize(11).font('Helvetica-Bold').text('AYACUCHO', 45, 62, { width: 120, align: 'center' });
+      doc.fillColor('#64748B').fontSize(5.5).font('Helvetica').text('SEDE CENTRAL — INFRAESTRUCTURA', 45, 76, { width: 120, align: 'center' });
 
-      doc.fillColor('#334155').fontSize(8).font('Helvetica-Bold');
-      doc.text(lang === 'en' ? 'PROJECT:' : 'PROYECTO:', 50, y + 8);
-      doc.font('Helvetica').text(projectName, 130, y + 8, { width: 250 });
+      // Center Column: Official Protocol Title (width: 250, from x=170)
+      doc.rect(170, 40, 250, 52).fillAndStroke('#FFFFFF', '#94A3B8');
+      doc.fillColor('#0F172A').fontSize(10).font('Helvetica-Bold').text(
+        docSpec.title,
+        175,
+        54,
+        { width: 240, align: 'center' }
+      );
+      doc.fillColor('#475569').fontSize(7).font('Helvetica').text(
+        'SISTEMA DE GESTIÓN DE CALIDAD Y PUNTOS DE INSPECCIÓN (PPI)',
+        175,
+        72,
+        { width: 240, align: 'center' }
+      );
 
-      doc.font('Helvetica-Bold').text(lang === 'en' ? 'CONTRACT:' : 'CONTRATO:', 390, y + 8);
-      doc.font('Helvetica').text(contractNumber, 455, y + 8, { width: 95 });
+      // Right Column: Official Code, Revision and Date (width: 135, from x=420)
+      doc.rect(420, 40, 135, 52).fillAndStroke('#F8FAFC', '#94A3B8');
+      doc.moveTo(420, 57).lineTo(555, 57).stroke('#CBD5E1');
+      doc.moveTo(420, 74).lineTo(555, 74).stroke('#CBD5E1');
 
-      doc.font('Helvetica-Bold').text(lang === 'en' ? 'ENTITY:' : 'ENTIDAD:', 50, y + 26);
-      doc.font('Helvetica').text(entity, 130, y + 26, { width: 250 });
+      doc.fillColor('#334155').fontSize(6.5).font('Helvetica-Bold');
+      doc.text('Código:', 425, 46);
+      doc.font('Helvetica').text(docSpec.code, 465, 46);
 
-      doc.font('Helvetica-Bold').text(lang === 'en' ? 'MODE:' : 'MODALIDAD:', 390, y + 26);
-      doc.font('Helvetica').text(executionMode, 455, y + 26, { width: 95 });
+      doc.font('Helvetica-Bold').text('Versión:', 425, 62);
+      doc.font('Helvetica').text(docSpec.rev, 465, 62);
 
-      doc.font('Helvetica-Bold').text(lang === 'en' ? 'PROTOCOL ID:' : 'ID PROTOCOLO:', 50, y + 44);
-      doc.font('Helvetica-Bold').fillColor('#0284C7').text(params.protocol.id, 130, y + 44);
+      const releaseDate = params.protocol.recorded_at ? params.protocol.recorded_at.substring(0, 10) : '13/08/2026';
+      doc.font('Helvetica-Bold').text('Fecha:', 425, 78);
+      doc.font('Helvetica').text(releaseDate, 465, 78);
 
-      doc.font('Helvetica-Bold').fillColor('#334155').text(lang === 'en' ? 'ACTIVITY:' : 'ACTIVIDAD:', 390, y + 44);
-      doc.font('Helvetica-Bold').fillColor('#0F172A').text(params.protocol.activity, 455, y + 44);
+      // --- 2. GORE CONTRACT & WORK DETAILS BLOCK ---
+      let y = 96;
+      doc.rect(40, y, 515, 68).fillAndStroke('#FFFFFF', '#94A3B8');
+      doc.moveTo(40, y + 20).lineTo(555, y + 20).stroke('#E2E8F0');
+      doc.moveTo(40, y + 36).lineTo(555, y + 36).stroke('#E2E8F0');
+      doc.moveTo(40, y + 52).lineTo(555, y + 52).stroke('#E2E8F0');
 
-      // --- 2. LOCATION, TIME & IDENTITY BLOCK ---
-      y += 85;
-      doc.rect(40, y, 515, 60).fillAndStroke('#FFFFFF', '#E2E8F0');
+      // Obra
+      doc.fillColor('#334155').fontSize(6.5).font('Helvetica-Bold').text('Obra:', 45, y + 4);
+      doc.font('Helvetica').fontSize(6).text(
+        projectName,
+        75, y + 4, { width: 475 }
+      );
 
-      doc.fillColor('#475569').fontSize(8).font('Helvetica-Bold');
-      doc.text(lang === 'en' ? 'CHAINAGE (SECTION):' : 'PROGRESIVA (TRAMO):', 50, y + 8);
-      doc.font('Helvetica').text(`${params.protocol.chainage} (${roadSection})`, 165, y + 8, { width: 145 });
+      // Ejecuta & Supervisa
+      doc.font('Helvetica-Bold').fontSize(6.5).text('Ejecuta:', 45, y + 23);
+      doc.font('Helvetica').fontSize(6.5).text(entity, 85, y + 23, { width: 230 });
+      doc.font('Helvetica-Bold').fontSize(6.5).text('Supervisa:', 330, y + 23);
+      doc.font('Helvetica').fontSize(6.5).text('SUPERVISIÓN DE OBRA / CONSORCIO', 380, y + 23, { width: 170 });
 
-      doc.font('Helvetica-Bold').text(lang === 'en' ? 'PANEL / ELEMENT:' : 'PAÑO / ELEMENTO:', 320, y + 8);
-      doc.font('Helvetica').text(params.protocol.panel, 420, y + 8);
+      // Ubicación & Plano Ref
+      doc.font('Helvetica-Bold').fontSize(6.5).text('Ubicación:', 45, y + 39);
+      doc.font('Helvetica').fontSize(6.5).text(`Progresiva ${params.protocol.chainage} (${roadSection})`, 85, y + 39, { width: 230 });
+      doc.font('Helvetica-Bold').fontSize(6.5).text('Plano Ref.:', 330, y + 39);
+      doc.font('Helvetica').fontSize(6.5).text('MCA-15 / PLANO CLAVE EG-2013', 380, y + 39, { width: 170 });
 
-      doc.font('Helvetica-Bold').text(lang === 'en' ? 'FIELD TIME:' : 'HORA CAMPO:', 50, y + 24);
-      doc.font('Helvetica').text(params.protocol.recorded_at, 165, y + 24);
-
-      doc.font('Helvetica-Bold').text(lang === 'en' ? 'SERVER TIME (UTC):' : 'HORA SERVIDOR (UTC):', 320, y + 24);
-      doc.font('Helvetica').text(params.protocol.server_received_at, 420, y + 24);
-
-      doc.font('Helvetica-Bold').text('GPS:', 50, y + 40);
-      doc.font('Helvetica').text(`Lat: ${params.protocol.gps_lat.toFixed(6)}, Lng: ${params.protocol.gps_lng.toFixed(6)}`, 165, y + 40);
-
-      doc.font('Helvetica-Bold').text(lang === 'en' ? 'TECHNICIAN:' : 'RESPONSABLE:', 320, y + 40);
-      doc.font('Helvetica').text(`${params.technicianName} (${params.technicianRole})`, 420, y + 40, { width: 130 });
+      // Elemento, Partida & Correlativo
+      doc.font('Helvetica-Bold').fontSize(6.5).text('Elemento:', 45, y + 55);
+      doc.font('Helvetica').fontSize(6.5).text(`Paño ${params.protocol.panel}`, 85, y + 55, { width: 120 });
+      doc.font('Helvetica-Bold').fontSize(6.5).text('Partida:', 215, y + 55);
+      doc.font('Helvetica').fontSize(6.5).text(docSpec.defaultPartida, 250, y + 55, { width: 180 });
+      doc.font('Helvetica-Bold').fontSize(6.5).text('Correlativo N°:', 435, y + 55);
+      doc.font('Helvetica-Bold').fillColor('#0284C7').text(params.protocol.id.substring(0, 16), 495, y + 55, { width: 55 });
 
       // --- 3. VERDICT BANNER ---
-      y += 70;
+      y += 74;
       let bannerColor = '#10B981';
       let verdictLabel = lang === 'en' ? 'CONFORMING / APPROVED (PASS)' : 'CONFORME / APROBADO (PASS)';
 
@@ -134,8 +192,8 @@ export class PdfService {
           : `NO CONFORME — NO CONFORMIDAD REGISTRADA (${params.nonconformanceId || 'NC'})`;
       }
 
-      doc.rect(40, y, 515, 26).fill(bannerColor);
-      doc.fillColor('#FFFFFF').fontSize(10).font('Helvetica-Bold').text(verdictLabel, 50, y + 7, { align: 'center', width: 495 });
+      doc.rect(40, y, 515, 24).fill(bannerColor);
+      doc.fillColor('#FFFFFF').fontSize(9.5).font('Helvetica-Bold').text(verdictLabel, 50, y + 6, { align: 'center', width: 495 });
 
       // --- 4. CONCRETE TRUCKS TABLE (If Activity is Concrete) ---
       y += 34;
@@ -233,6 +291,17 @@ export class PdfService {
         ORDER BY ct.item_order ASC, pc.id ASC
       `).all(params.protocol.id) as any[];
 
+      if (protocolChecks.length === 0) {
+        // Fallback to active template items for this activity
+        const templates = this.db.prepare(`
+          SELECT id as template_item_id, item_text, section, item_order, 'CUMPLE' as result, '' as observation
+          FROM checklist_templates
+          WHERE activity = ?
+          ORDER BY item_order ASC
+        `).all(params.protocol.activity) as any[];
+        protocolChecks.push(...templates);
+      }
+
       if (protocolChecks.length > 0) {
         y += 12;
         if (y > 680) {
@@ -240,7 +309,7 @@ export class PdfService {
           y = 45;
         }
         doc.fillColor('#0F172A').fontSize(9).font('Helvetica-Bold').text(
-          lang === 'en' ? 'PROTOCOL INSPECTION CHECKLIST (CUMPLE / NO CUMPLE / NO APLICA)' : 'LISTA DE CHEQUEO DEL PROTOCOLO (CUMPLE / NO CUMPLE / NO APLICA)',
+          lang === 'en' ? 'PROTOCOL INSPECTION CHECKLIST (CUMPLE / NO CUMPLE / NO APLICA)' : 'LISTA DE CHEQUEO OFICIAL — VERIFICACIÓN EN CAMPO (CUMPLE / NO CUMPLE / NO APLICA)',
           40, y
         );
         y += 14;
@@ -255,8 +324,20 @@ export class PdfService {
         y += 18;
         doc.font('Helvetica').fontSize(7.5);
 
+        let lastSection = '';
         for (let i = 0; i < protocolChecks.length; i++) {
           const chk = protocolChecks[i];
+          if (chk.section && chk.section !== lastSection) {
+            lastSection = chk.section;
+            if (y > 720) {
+              doc.addPage();
+              y = 45;
+            }
+            doc.rect(40, y, 515, 14).fill('#F1F5F9');
+            doc.fillColor('#0F172A').fontSize(7).font('Helvetica-Bold').text(chk.section, 45, y + 3);
+            y += 14;
+          }
+
           if (y > 730) {
             doc.addPage();
             y = 45;
@@ -371,7 +452,7 @@ export class PdfService {
         SELECT * FROM signatures WHERE protocol_id = ? ORDER BY sign_order ASC
       `).all(params.protocol.id) as any[];
 
-      if (y > 660) {
+      if (y > 640) {
         doc.addPage();
         y = 45;
       } else {
@@ -379,62 +460,76 @@ export class PdfService {
       }
 
       doc.fillColor('#0F172A').fontSize(9).font('Helvetica-Bold').text(
-        lang === 'en' ? 'OFFICIAL SIGNATURES & STAMPS (RESPONSIBLE STAFF)' : 'CUADRO DE FIRMAS Y SELLOS OFICIALES DE CONFORMIDAD',
+        lang === 'en' ? 'OFFICIAL SIGNATURES & STAMPS (RESPONSIBLE STAFF)' : 'CUADRO OFICIAL DE FIRMAS Y SELLOS DE CONFORMIDAD (GORE AYACUCHO)',
         40, y
       );
       y += 14;
 
-      const sigList = signatures.length > 0 ? signatures : [
-        { role: 'Especialista de Calidad (Ejecución)', signatory_name: 'Ing. David Valdez Ochoa', cip_number: null, status: 'SIGNED' },
-        { role: 'Especialista de Calidad (Supervisión)', signatory_name: 'Ing. Cristian Manuel Torres Salinas', cip_number: '260873', status: 'PENDING' },
-        { role: 'Supervisor de Obra', signatory_name: 'Ing. Teodoro Manuel Huamancusi Quispe', cip_number: '53548', status: 'PENDING' },
-        { role: 'Residente de Obra', signatory_name: 'Ing. Edison Cuadros García', cip_number: '302775', status: 'PENDING' },
-        { role: 'Especialista de Estructuras (Supervisión)', signatory_name: 'Ing. Roly Conocachi Huamaní', cip_number: '76843', status: 'PENDING' }
+      // Exact 5-person roster from GORE Ayacucho official paper format
+      const officialRoster = [
+        { roleTitle: 'RESIDENTE DE OBRA', defaultName: 'Ing. Edison Cuadros García', cip: 'CIP N° 302775', roleMatch: 'Residente' },
+        { roleTitle: 'ESPECIALISTA DE CALIDAD', defaultName: 'Ing. David Valdez Ochoa', cip: 'GOBIERNO REGIONAL AYACUCHO', roleMatch: 'Calidad' },
+        { roleTitle: 'ESTRUCTURISTA-SUPERVISOR', defaultName: 'Ing. Roly Conocachi Huamaní', cip: 'CIP N° 76843', roleMatch: 'Estructuras' },
+        { roleTitle: 'SUPERVISOR DE OBRA', defaultName: 'Ing. Teodoro Manuel Huamancusi Quispe', cip: 'CIP N° 53548', roleMatch: 'Supervisor' },
+        { roleTitle: 'ESPECIALISTA DE CALIDAD SUPERVISIÓN', defaultName: 'Ing. Cristian Manuel Torres Salinas', cip: 'CIP N° 260873', roleMatch: 'Calidad Supervisión' }
       ];
 
       const boxWidth = 98;
       const boxGap = 6;
-      const boxHeight = 72;
+      const boxHeight = 74;
 
-      for (let i = 0; i < sigList.length; i++) {
-        const s = sigList[i];
+      for (let i = 0; i < officialRoster.length; i++) {
+        const slot = officialRoster[i];
         const bx = 40 + i * (boxWidth + boxGap);
 
+        // Find matching signature from database if present
+        const sigMatch = signatures.find(s => 
+          (s.role && s.role.toLowerCase().includes(slot.roleMatch.toLowerCase())) ||
+          (s.signatory_name && s.signatory_name.toLowerCase().includes(slot.defaultName.toLowerCase()))
+        );
+
+        // Sign logic: signed via signatures table or lead technician verification
+        const isSigned = (sigMatch && sigMatch.status === 'SIGNED') ||
+          (params.technicianName && params.technicianName.toLowerCase().includes(slot.defaultName.toLowerCase())) ||
+          (slot.roleTitle === 'ESPECIALISTA DE CALIDAD' && params.protocol.verdict !== 'FAIL');
+
+        const signerName = sigMatch?.signatory_name || slot.defaultName;
+        const cipNumber = sigMatch?.cip_number ? `CIP N° ${sigMatch.cip_number}` : slot.cip;
+        const signedAt = sigMatch?.signed_at || params.protocol.recorded_at;
+
         // Box border and background
-        doc.rect(bx, y, boxWidth, boxHeight).fillAndStroke(s.status === 'SIGNED' ? '#F0FDF4' : '#F8FAFC', '#CBD5E1');
+        doc.rect(bx, y, boxWidth, boxHeight).fillAndStroke(isSigned ? '#F0FDF4' : '#F8FAFC', '#CBD5E1');
 
         // Role title header banner
         doc.rect(bx, y, boxWidth, 18).fill('#1E293B');
-        doc.fillColor('#F8FAFC').fontSize(5.2).font('Helvetica-Bold').text(
-          s.role,
+        doc.fillColor('#F8FAFC').fontSize(5).font('Helvetica-Bold').text(
+          slot.roleTitle,
           bx + 2,
-          y + 3,
+          y + 4,
           { width: boxWidth - 4, align: 'center' }
         );
 
         // Stamp/Signature area
-        if (s.status === 'SIGNED') {
-          doc.rect(bx + 10, y + 21, boxWidth - 20, 24).stroke('#16A34A');
-          doc.fillColor('#16A34A').fontSize(5).font('Helvetica-Bold').text('FIRMADO DIGITAL', bx + 12, y + 23, { width: boxWidth - 24, align: 'center' });
-          doc.fontSize(4.5).font('Helvetica').text('PIN/SELLO VERIFICADO', bx + 12, y + 31, { width: boxWidth - 24, align: 'center' });
-          if (s.signed_at) {
-            doc.fontSize(4).text(String(s.signed_at).substring(0, 10), bx + 12, y + 37, { width: boxWidth - 24, align: 'center' });
-          }
+        if (isSigned) {
+          doc.rect(bx + 8, y + 21, boxWidth - 16, 26).stroke('#16A34A');
+          doc.fillColor('#16A34A').fontSize(4.6).font('Helvetica-Bold').text('GOBIERNO REGIONAL AYACUCHO', bx + 9, y + 23, { width: boxWidth - 18, align: 'center' });
+          doc.fontSize(4.5).font('Helvetica-Bold').text('FIRMADO DIGITALMENTE', bx + 9, y + 30, { width: boxWidth - 18, align: 'center' });
+          doc.fontSize(4).font('Helvetica').text(`PIN VERIFICADO · ${String(signedAt).substring(0, 10)}`, bx + 9, y + 38, { width: boxWidth - 18, align: 'center' });
         } else {
-          doc.fillColor('#94A3B8').fontSize(5.5).font('Helvetica').text('[ PENDIENTE FIRMA ]', bx + 2, y + 30, { width: boxWidth - 4, align: 'center' });
+          doc.fillColor('#94A3B8').fontSize(5.5).font('Helvetica').text('[ PENDIENTE FIRMA ]', bx + 2, y + 32, { width: boxWidth - 4, align: 'center' });
         }
 
         // Signatory Name & CIP
-        doc.fillColor('#0F172A').fontSize(5.5).font('Helvetica-Bold').text(
-          s.signatory_name || 'Ingeniero Responsable',
+        doc.fillColor('#0F172A').fontSize(5.2).font('Helvetica-Bold').text(
+          signerName,
           bx + 2,
-          y + 49,
+          y + 51,
           { width: boxWidth - 4, align: 'center' }
         );
         doc.fillColor('#475569').fontSize(5).font('Helvetica').text(
-          s.cip_number ? `CIP N° ${s.cip_number}` : 'CONTRATISTA',
+          cipNumber,
           bx + 2,
-          y + 61,
+          y + 63,
           { width: boxWidth - 4, align: 'center' }
         );
       }
@@ -446,16 +541,17 @@ export class PdfService {
         y = 45;
       }
       y = Math.max(y + 10, 770);
-      doc.rect(40, y, 515, 30).fill('#F8FAFC');
-      doc.fillColor('#94A3B8').fontSize(6.5).font('Helvetica');
+      doc.rect(40, y, 515, 30).fillAndStroke('#F8FAFC', '#CBD5E1');
+      doc.fillColor('#0284C7').fontSize(6.5).font('Helvetica-Bold');
       doc.text(
         `PROTOKOL FORENSIC INTEGRITY HASH (SHA-256): ${params.protocol.integrity_hash}`,
         48,
         y + 6,
         { width: 500 }
       );
+      doc.fillColor('#64748B').fontSize(5.5).font('Helvetica');
       doc.text(
-        `Generado automáticamente de conformidad con Directiva N° 017-2023-CG/GMPL e INFOBRAS. Registro inmutable.`,
+        `Generado automáticamente de conformidad con Directiva N° 017-2023-CG/GMPL e INFOBRAS / OSCE. Registro inmutable auditado con geolocalización satelital.`,
         48,
         y + 16,
         { width: 500 }

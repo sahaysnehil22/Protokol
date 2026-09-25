@@ -23,6 +23,7 @@ The engineering source of truth is `docs/originales/PROTOKOL_TECHNICAL_DOC_v2_4.
 | v2.2 | Section 12: future directions (single-role RAG assistant, multi-project data accumulation) + question 7 |
 | v2.3 | Real validation thresholds (slump 8.9–12.7 cm, 4 cylinders per truck, f'c per partida), real signature roster with CIP numbers, evidence from 6 signed field protocols, **subcontractor scope**, correction: formwork/steel template codes are different element types, not competing versions |
 | v2.4 | Post-audit fixes: API contract examples corrected to real values (slump 10, 4 cylinders, expected 8.9–12.7), questions 3 & 7 marked **answered by Snehil**, 3 more competitors confirmed (Calidad Cloud, ObraLink, Bildin) |
+| v2.5 (data) | **Source-data extraction, 24-Sep-2026:** the six Excel formats from Ing. David (Encofrado, Acero, Concreto, Topografía, Probetas, Liberación CA Yee) were copied to `docs/originales/protocolos_david/` and their full checklists/fields extracted into Annex A of this spec and `PROTOCOLOS.md`. These are the authoritative seed data for `checklist_templates` (F1) — build the templates **verbatim from Annex A**, not from memory |
 
 ### 1.2 What we are leaving behind
 
@@ -237,9 +238,11 @@ create table protocols (
 create table mixer_loads (         -- per-mixer/batch sampling (Section 2.3)
   id                uuid primary key default gen_random_uuid(),
   protocol_id       uuid references protocols(id) not null,
-  mixer_id          text not null,          -- truck plate/ID, e.g. '6D37'
-  delivery_note     text,                   -- guía de despacho (legal document)
+  mixer_id          text not null,          -- truck plate/ID, e.g. '6D37' (paper: PLACA, Titan register)
+  delivery_note     text,                   -- guía de despacho / N° O/ENT (legal document)
   slump             text,                   -- discrete selected value: "3.5" | "4" | "4.5" | "5" (inches, F2)
+  vol_m3            numeric,                -- dispatched volume per guía (GDC-PCC-2026 §3 + Titan register)
+  vobo              boolean,                -- V°B° per guía row (paper column)
   supplier          text default 'Concreto Titan',
   created_at        timestamptz default now()
 );
@@ -248,11 +251,13 @@ create table cylinders (
   id                uuid primary key default gen_random_uuid(),
   protocol_id       uuid references protocols(id),
   mixer_load_id     uuid references mixer_loads(id),
-  cylinder_code     text not null,          -- e.g. 'P-2026-0847-A'
+  cylinder_code     text not null,          -- real naming (SGC-CRP-2026): 'M-13-1', 'Z-AL2-C.ENT' (prefix M-=muro, Z-=zapata + element)
+  ubicacion         text,                   -- chainage/structure tag from the register, e.g. '3+315' (paper: UBICACIÓN)
   cast_date         date,
   test_date         date,
-  age_days          int,                    -- 7 | 28
+  age_days          int,                    -- 7 | 28 (paper computes EDAD = rotura − muestreo)
   strength_kgcm2    numeric,
+  strength_pct      numeric,                -- paper: RESISTENCIA AL F'C (%) vs design
   lab               text,                   -- 'AKHISE'
   report_photo_key  text,
   created_at        timestamptz default now()
@@ -332,20 +337,48 @@ create table notifications (
 ```jsonc
 // protocols.measurements for activity=CONCRETE
 {
-  "design_fc": 210,                 // 140 | 175 | 210 | 245 | 280 kg/cm2 per partida (internal config, F5)
+  "design_fc": 280,                 // 140 | 175 | 210 | 245 | 280 kg/cm2 per partida (internal config, F5)
+                                     // paper confirms: 280 = pavement (GDC-PCC-2026); 210/175 = veredas (GRA/PR-001)
   "truck_count": 3,                 // mixer_loads rows follow (one guía + one slump per mixer, F12)
   "chainage_from": "0+144",         // prefilled from the schedule — silent, not user-typed (F3)
-  "chainage_to":   "0+216"
+  "chainage_to":   "0+216",
+  // §2 "Tipo de concreto y colocación" block (paper fields, GDC-PCC-2026):
+  "procedencia": "premezclado",     // "hecho_en_obra" | "premezclado"
+  "colocacion": "directo",          // "directo" | "grua_balde"
+  "acabado": "caravista",           // "caravista" | "otro"
+  "testigos_cilindricos": 6,        // cylinders cast for the whole pour (paper field; per-mixer count is 4)
+  "testigos_viga": 0,               // beam specimens for the pour (paper field)
+  // §3 "Control de calidad" cubicación (paper fields):
+  "vol_teorico_m3": 25.5,           // Σ paño rows: Nro veces × Long × Base × Altura
+  "vol_real_m3": 24.0,              // Σ truck guías dispatched (cross-checked vs. Titan register)
+  // climate block (GDC-PLV-2026 liberación):
+  "clima": "soleado",               // "despejado" | "soleado" | "nublado"
+  "turno": "dia",                   // "dia" | "noche"
+  "inicio_vaciado": "2026-09-14T08:10:00-05:00",
+  "fin_vaciado":   "2026-09-14T11:40:00-05:00"
 }
-// mixer_loads rows for CONCRETE (per truck, per day):
-// { "mixer_id": "6D37", "delivery_note": "GR-00412", "slump": "4", "cylinders_cast": 4 }
-//  → slump is a SELECTED discrete value, not a number in range (F2)
+// mixer_loads rows for CONCRETE (per truck, per day — GDC-PCC-2026 §3 columns):
+// { "mixer_id": "6D37", "delivery_note": "GR-00412", "slump": "4", "vol_m3": 8.0, "vobo": true, "cylinders_cast": 4 }
+//  → slump is a SELECTED discrete value, not a number in range (F2); V°B° = per-guía visto bueno
 
-// protocols.measurements for activity=SURVEY
-{ "elevation_deviation_cm": 0.8, "chainage_from": "0+144", "chainage_to": "0+216" }
-// protocols.measurements for activity=STEEL
-{ "bar_diameter_mm": 12, "bar_spacing_cm": 20, "concrete_cover_cm": 5 }
-// protocols.measurements for activity=FORMWORK
+// protocols.measurements for activity=SURVEY (GCO-PVT-2026 paper fields)
+{
+  "elevation_deviation_cm": 0.8,
+  "chainage_from": "0+144", "chainage_to": "0+216",
+  "equipo_1": { "marca": "", "modelo": "", "serie": "" },
+  "equipo_2": { "marca": "", "modelo": "", "serie": "" },
+  "calibracion": true, "n_certificado": "CAL-...",   // calibration certificate required
+  "punto_referencia": "BM",            // BM (Bench Mark) | PA (Puntos Auxiliares) | PC (Punto de Control)
+  "coordenadas": [                     // one row per reference point
+    { "punto_ref": "BM-1", "nombre": "Bench Mark 1", "este_x": 584021.12, "norte_y": 8552130.44, "cota_z": 3190.60 }
+  ],
+  "plano_adjunto": true,               // plano/sketch attached (yes/no in paper)
+  "archivo_levantamiento": "storage-key"  // Levantamiento topográfico file (paper: ARCHIVO field)
+}
+// protocols.measurements for activity=STEEL (FO01PT03 + GDC-PLA-2026 paper fields)
+{ "bar_diameter": "1/2\" corrugado", "bar_spacing_cm": 20, "concrete_cover_cm": 5,
+  "traslape_cm": 40, "gancho_cm": 15, "radio_doblez_cm": 6, "wire_tie": true }
+// protocols.measurements for activity=FORMWORK (GDC-PDE-2026)
 { "panel": "15", "chainage_from": "0+144", "chainage_to": "0+216" }
 // protocols.measurements for activity=COMPACTION
 { "compaction_pct": 101.4, "moisture_deviation": 0.9, "thickness_cm": 22 }
@@ -354,7 +387,10 @@ create table notifications (
 `criteria` rows seed these validations as data (see `PROTOCOLOS.md` §5 for the thresholds):
 slump as `operator='in'` with `allowed_values ["3.5","4","4.5","5"]` (discrete selector, F2 — supersedes
 the 8.9–12.7 range); f'c per partida; 4 cylinders per mixer; compaction ≥100% Modified Proctor; moisture
-±1.5%; sub-base ≥20 cm; base ≥25 cm; survey ≤1 cm; steel per structural drawing.
+±1.5%; sub-base ≥20 cm; base ≥25 cm; survey ≤1 cm; steel per structural drawing. Additional
+machine-checkable gates discovered in the paper formats (Annex A): survey equipment **calibration
+certificate on file** (GCO-PVT-2026), volumetric cross-check `vol_real_m3` vs. `vol_teorico_m3`
+(GRA/PR-001 §3), and the **V°B° per guía** confirmation (GDC-PCC-2026 §3).
 
 The checklist items themselves (paper-format, F1) live in `checklist_templates` / `protocol_checks`
 (Section 3.6), NOT in `criteria`: `criteria` holds machine-checkable thresholds (slump values, compaction
@@ -382,6 +418,21 @@ signing in Phase 0 — but every `signatures` row is append-only and referenced 
 integrity chain. **The per-signer box UI, sign order, and hold-point gating are specified in Section 3.7** —
 this roster is the data that populates those boxes (F4/F6).
 
+**Signature grids per template family (extracted from the Excel formats, 24-Sep-2026) — the PDF must
+render the grid of the template it mirrors, verbatim:**
+
+| Template family (files) | Paper signature boxes |
+|---|---|
+| Pavimento Yanamilla — Encofrado/Acero/Concreto (`02/03/04. PAVIMENTO_*.xlsx`, Cód. GDC-PDE-2026 / FO01PT03 / GDC-PCC-2026) | RESIDENTE DE OBRA · ESPECIALISTA DE CALIDAD · ESTRUCTURISTA-SUPERVISOR · SUPERVISOR DE OBRA |
+| Ciudad Libertad — Encofrado/Concreto (hojas PR12+, Cód. FO01PT02 / GRA/PR-001) | PRODUCCIÓN · CALIDAD · RESIDENTE DE OBRA · INSPECTOR DE OBRA |
+| Liberación de estructuras CA Yee (`PROTOCOLO CA YEE.xlsx`, Cód. GDC-PLE/PLA/PLV-2026) | RESIDENTE DE OBRA · SUPERVISOR DE OBRA / ESPECIALISTA DE CALIDAD EJECUCIÓN · ESTRUCTURAS-SUPERVISIÓN / ESPECIALISTA DE CALIDAD SUPERVISIÓN |
+| Probetas (`GR-PROBETA*.xlsx`, Cód. SGC-CRP-2026) | Ing. RESIDENTE · ESPECIALISTA CALIDAD · ESTRUCTURISTA-SUPERVISOR · SUPERVISOR DE OBRA (+ RESPONSABLE DE CAMPO) |
+| Topografía (`PRO-TOPOGRAFIA-2026.xlsx`, Cód. GCO-PVT-2026) | RESIDENTE DE OBRA · ESPECIALISTA DE CALIDAD EJECUCIÓN · SUPERVISOR DE OBRA · ESTRUCTURAS-SUPERVISIÓN + ESPECIALISTA DE CALIDAD SUPERVISIÓN |
+
+Model as `signatures.role` values per template; the pilot roster (names/CIPs above) fills the default
+Yanamilla configuration. `checklist_templates` should carry the same family tag so a template pick
+implies its signature grid.
+
 ### 3.5 Offline protocol release & sync logic
 
 Requirements (from the field behavior documented in `CHAT_GCALIDAD_RESUMEN.md`):
@@ -407,20 +458,28 @@ The MVP was rejected because its form was a 3–4 criterion summary. The digital
 paper format. Implementation model:
 
 1. **`checklist_templates` = the paper checklist, loaded as data.** One row per item per activity
-   (`section` + `item_text` + `item_order`), e.g. for STEEL: "El acero instalado presenta certificado de
-   calidad", "Los diámetros de acero son los indicados en los planos", "Las intersecciones están aseguradas
-   con alambre de amarra". Seeded from the real Excel/paper formats we already hold (GR-PROBETA plantilla,
-   the signed protocols). Template rows are append-only with `version` — edits create a new version,
-   never mutate a released checklist.
+   (`section` + `item_text` + `item_order`). **Seed verbatim from Annex A of this spec** (extracted
+   24-Sep-2026 from Ing. David's Excel files in `docs/originales/protocolos_david/`): e.g. STEEL
+   (FO01PT03) sections 1. MATERIAL / 2. GENERAL / 3. OTROS with items "¿Las intersecciones están
+   aseguradas con alambre de amarre?", "¿Se colocaron dados de concreto en la base de la armadura?", etc.
+   Template rows are append-only with `version` — edits create a new version, never mutate a released
+   checklist.
 2. **`protocol_checks` = the technician's answer per item** — `CUMPLE | NO_CUMPLE | NO_APLICA` + optional
    observation. `NO_CUMPLE` without observation is allowed but flagged; any `NO_CUMPLE` opens the NC
-   workflow (F10).
+   workflow (F10). **Column variant per template family:** the pavimento templates use
+   CUMPLE/NO CUMPLE/NO APLICA; Concreto GDC-PCC-2026 §1 and §4 use Si/No/N/A; Topografía GCO-PVT-2026
+   uses C/NC/NA + a V.B (visto bueno) column; CA Yee uses SI/NO/NA. Normalize internally to the
+   3-state enum, render with the template's original labels.
 3. **Per-instance variable fields are only:** release date, partida, chainage from/to (F3). Chainage is
-   prefilled from the pour schedule (the existing Cronograma_Progresivas data); the user does not type it.
-   GPS is never a visible field — it rides along as photo/record metadata (R9).
+   prefilled from the pour schedule (`Cronograma_Progresivas.xlsx`: Carril, Progresiva Inicial/Final,
+   Día Programado, Cubos m³); the user does not type it. GPS is never a visible field — it rides along
+   as photo/record metadata (R9). **Correlativo N°:** several paper templates auto-derive it from the
+   sheet/file name (`=RIGHT(CELL("nombrearchivo",…),2)`) — the digital equivalent is a sequential
+   correlative per project, shown in the header, never typed by the user.
 4. **Rendering:** the PWA renders the template in the same visual order as the paper format (sections,
-   numbered items, three-state answer buttons). The generated PDF mirrors the same layout — the protocol
-   IS the paper, not a summary of it.
+   numbered items, three-state answer buttons, and — for CONCRETE — the non-checklist blocks: type/
+   placement/finish selectors, per-truck guía table with V°B°, cubicación table, climate/turno block).
+   The generated PDF mirrors the same layout — the protocol IS the paper, not a summary of it.
 5. **Machine criteria vs. checklist:** `criteria` (thresholds like slump values, compaction %) run
    automatically and drive the verdict/NC. `protocol_checks` are the human verifications. Both are stored;
    the PDF shows the checklist; the API response `checks[]` reports the machine criteria.
@@ -597,8 +656,10 @@ acceptance criterion, tested by Kenny on a real phone, decision recorded in the 
        `signatory_id` / `stamp_key`, and `subcontractor_id`.
 3. [ ] **Migration 002** — seed `projects` (AY-728-001), seed `criteria` (slump as `operator='in'`
        with `allowed_values ["3.5","4","4.5","5"]`, f'c 280/210 included), and seed
-       **`checklist_templates` from the real paper formats** (GR-PROBETA plantilla + the six signed
-       protocols) for the 5 activities. Never seed these in application code.
+       **`checklist_templates` verbatim from Annex A** — the six Excel formats of Ing. David now in
+       `docs/originales/protocolos_david/` (Encofrado GDC-PDE-2026 + FO01PT02, Acero FO01PT03,
+       Concreto GDC-PCC-2026 + GRA/PR-001, Topografía GCO-PVT-2026, Probetas SGC-CRP-2026,
+       Liberación CA Yee GDC-PLE/PLA/PLV-2026) for the 5 activities. Never seed these in application code.
 4. [ ] **`POST /protocols`** — validate against `criteria`, create `protocol_checks` rows, compute
        `integrity_hash`, insert `protocols`, open `nonconformances` on failure, return verdict + checks
        array (v2.4 contract §8.1; adapt fields to the 5-activity chain).
@@ -722,6 +783,170 @@ functionality now.
 
 ---
 
+## Annex A — Checklist seed data (extracted from Ing. David's Excel formats, 24-Sep-2026)
+
+Authoritative source for `checklist_templates` seeds (Migration 002). Files live in
+`docs/originales/protocolos_david/`. Seed these items **verbatim, in this order**; the rendered PWA/PDF
+must match the paper layout (F1). Answer columns per family: pavimento = CUMPLE/NO CUMPLE/NO APLICA;
+concreto blocks = Si/No/N/A; topografía = C/NC/NA + V.B; CA Yee = SI/NO/NA. Normalize to the 3-state
+enum internally.
+
+### A.1 FORMWORK — `02. PAVIMENTO_ENCOFRADO_MI.xlsx` (GDC-PDE-2026, Rev. 001, 13/06/2026)
+
+Header fields: Obra · Ejecuta · Ubicación · Elemento · PARTIDA · Fecha liberación · PLANO DE REFERENCIA ·
+Correlativo N°.
+
+| Section | Item |
+|---|---|
+| 1. DESCRIPCION DE ACTIVIDAD | 1.01 ¿Tipo de encofrado es adecuado para el tipo de estructura a concretar? |
+| | 1.02 ¿Los accesorios empleados son los adecuados? |
+| | 1.03 ¿Ubicación correcta de los elementos embebidos? |
+| | 1.04 ¿Los puntales son los adecuados? |
+| 2. VERIFICACIÓN DE LOS MATERIALES | 2.01 Dimensiones del encofrado según los planos y las EETT. |
+| | 2.02 Distancias entre ejes y longitudes de encofrado. |
+| | 2.04 Verificación del alineamiento del encofrado. |
+| | 2.05 Verificación de la verticalidad o inclinación en los diferentes encofrados |
+
+Signatures: RESIDENTE DE OBRA · ESPECIALISTA DE CALIDAD · ESTRUCTURISTA-SUPERVISOR · SUPERVISOR DE OBRA.
+
+Variant FO01PT02 (sheets PR12–PR19, Ciudad Libertad project) — extended items, also valid template rows:
+1.01 ¿El acero de refuerzo está verificado y conforme? · 1.02 tipo de encofrado · 1.03 accesorios ·
+1.04 elementos embebidos · 1.05 puntales · 1.06 ¿Los paneles de encofrado se encuentran limpios? ·
+2.01 ¿Listones de madera según los requerimientos? · 2.02 ¿Tirante y tuerca mariposa de encofrado? ·
+2.03 ¿Aditivo desmoldante con especificaciones del fabricante? · 2.04 ¿Dados de concreto de las
+dimensiones especificadas en los planos? · 3.01 Dimensiones según planos y EETT · 3.02 Distancias entre
+ejes · 3.03 Paredes internas con capa de desmoldante · 3.04 Alineamiento · 3.05 Verticalidad ·
+3.06 Ochavos colocados según especificación · 3.07 Dados colocados según especificación.
+Signatures variant: PRODUCCIÓN · CALIDAD · RESIDENTE DE OBRA · INSPECTOR DE OBRA.
+
+### A.2 STEEL — `03. PAVIMENTO_ACERO_MI.xlsx` (FO01PT03, Rev. 001, 13/06/2026)
+
+| Section | Item |
+|---|---|
+| 1. MATERIAL | 1.01 Calidad del acero / Fluencia corresponde con las EETT del proyecto |
+| | 1.02 ¿El acero instalado presenta certificado de calidad? |
+| 2. GENERAL | 2.01 ¿Las armaduras de acero son del diámetro indicado en los planos ó EETT? |
+| | 2.02 ¿Las intersecciones están aseguradas con alambre de amarre? |
+| | 2.03 ¿Se colocaron dados de concreto en la base de la armadura? |
+| | 2.04 ¿Se colocaron dados de concreto en los laterales de la armadura? |
+| | 2.05 ¿La armadura está ubicada vertical y horizontalmente según EETT y planos? |
+| | 2.06 ¿Las cotas del acero colocado están de acuerdo a los planos? |
+| | 2.07 ¿Las distancias entre las varillas son las que se indican en los planos de referencia? |
+| 3. OTROS | 3.01 ¿Las armaduras están libres de óxidos y sustancias extrañas en su superficie? |
+| | 3.02 ¿Todas las condiciones están dadas para dar conformidad a la armadura de acero? |
+
+Note: template carries annex columns "VACIADOS REAL / VACIADOS PARA PROTOCOLOS" (fecha | Pedido | m³ |
+ETAPA) — the pour schedule embedded in the format. Digitally, prefilled from `Cronograma_Progresivas.xlsx`
+(Carril, Progresiva Inicial/Final, Día Programado, Color, Cubos m³). Signatures: RESIDENTE DE OBRA ·
+ESPECIALISTA DE CALIDAD · ESTRUCTURISTA-SUPERVISOR · SUPERVISOR DE OBRA.
+
+### A.3 CONCRETE — `04. PAVIMENTO_CONCRETO_MI.xlsx` (GDC-PCC-2026, Rev. 001, 13/06/2026)
+
+Header: OBRA · EJECUTA · SUPERVISA · ELEMENTO Y UBICACIÓN · PLANO DE REFERENCIA · Fecha de liberación ·
+PARTIDA · Correlativo N°.
+
+**Block 1 — INSPECCIÓN PREVIA AL VACIADO (Si/No/N/A):**
+
+| # | Item |
+|---|---|
+| 1.1 | ¿Se cuenta con diseño de mezcla aprobado por la Supervisión? |
+| 1.2 | ¿La superficie del solado está limpia, libre de tierra, raíces y arena? |
+| 1.3 | ¿El acero de refuerzo se encuentra limpio, libre de lubricantes y óxidos? |
+| 1.4 | ¿La posición del acero de refuerzo y el encofrado ha sido verificado por el topógrafo? |
+| 1.5 | ¿El espesor de recubrimiento de concreto cumple con lo indicado según ET? |
+| 1.6 | ¿Se encuentra con una referencia para determinar el nivel de llenado de concreto? |
+| 1.7 | ¿Se ha verificado la conformidad de las juntas? |
+| 1.8 | ¿Se ha verificado la conformidad de los recubrimientos mínimos? |
+| — | ¿Las condiciones están dadas para iniciar el concretado? → Si / No (gate) |
+
+Variant GRA/PR-001 (sheets PR12+): 1.8 instalaciones sanitarias · 1.9 instalaciones eléctricas ·
+1.10 instalaciones mecánicas · 1.11 anclajes estructurales · 1.12 recubrimientos mínimos.
+
+**Block 2 — TIPO DE CONCRETO Y COLOCACIÓN (checkboxes):** F´c diseño (280 KG/CM² pavement; 210–175
+KG/CM² veredas) · SLUMP (value per pour, e.g. 5 1/2") · Testigos Cilíndricos (count, e.g. 6) ·
+Testigos Viga (count, e.g. 0) · PROCEDENCIA: Hecho en obra | Premezclado · COLOCACIÓN: Directo |
+Grúa y balde · ACABADO: Caravista | Otro.
+
+**Block 3 — CONTROL DE CALIDAD:** per-truck table **N° de Guía | Slump | Vol. (m³) | V°B°** (two
+column-groups) + "Número de testigos elaborados" row; cubicación table **Elemento | N° de veces | Long |
+Base | Altura | Parcial | Total** → **Cantidad de concreto teórico (M³)** / **Cantidad de concreto
+real (M³)**.
+
+**Block 4 — VERIFICACIÓN POSTERIOR AL VACIADO (Si/No/N/A + Observaciones):**
+1 Acabado superficial de acuerdo a lo especificado · 2 Nivel de aplomado del elemento de acuerdo a lo
+especificado · 3 Correcta posición final de los elementos embebidos · 4 Curado de la estructura
+concretada adecuado.
+
+COMENTARIOS / OBSERVACIONES + signatures: RESIDENTE DE OBRA · ESPECIALISTA DE CALIDAD ·
+ESTRUCTURISTA-SUPERVISOR · SUPERVISOR DE OBRA (GRA/PR-001: PRODUCCIÓN · CALIDAD · RESIDENTE DE OBRA ·
+INSPECTOR).
+
+### A.4 SURVEY — `PRO-TOPOGRAFIA-2026 - copia.xlsx` (GCO-PVT-2026, Rev. 01, 08/06/2026)
+
+Header: OBRA · PLANO DE REF. · UBICACIÓN/PROGRESIVA · TRAMO · ELEMENTO · FECHA · N° CORRELATIVO ·
+DESCRIPCIÓN DE TRABAJO. Columns: NA | INSPECCIÓN (C/NC) | OBSERVACIONES | V.B.
+
+| Section | Item |
+|---|---|
+| 1. VERIFICACION PRELIMINAR | 1.1 Área limpia y sin obstáculos · 1.2 Área de trabajo señalizada · 1.3 Equipos y herramientas operativas · 1.4 Se cuenta con todos los permisos de seguridad (AST, etc.) |
+| 2. VERIFICACIÓN DURANTE LA ACTIVIDAD | 2.1 Ubicación de puntos auxiliares · 2.2 Replanteo de linderos del terreno · 2.3 Levantamiento topográfico · 2.4 Trazo y replanteo de ejes · 2.5 Distancia y proporcionalidad entre ejes · 2.6 Colocación de niveles · 2.7 Verticalidad y alineamiento |
+| 3. VERIFICACIONES POSTERIORES | 3.1 Recojo de equipos y herramientas · 3.2 Limpieza del área de trabajo |
+
+Data blocks: EQUIPO 1/2 (MARCA, MODELO, SERIE) · CALIBRACIÓN Sí/No · N° DE CERTIFICADO · ARCHIVO
+(levantamiento topográfico) · coordinates table PUNTO REF. | NOMBRE | (ESTE) X | (NORTE) Y | (COTA) Z ·
+punto de referencia BM/PA/PC · plano/sketch adjunto Sí/No. Signatures: RESIDENTE DE OBRA ·
+ESPECIALISTA DE CALIDAD EJECUCIÓN · SUPERVISOR DE OBRA · ESTRUCTURAS-SUPERVISIÓN +
+ESPECIALISTA DE CALIDAD SUPERVISIÓN.
+
+### A.5 CYLINDERS — `GR-PROBETA-2026 - copia.xlsx` + `GR-PROBETA JULIO-2026-PLANTILLA.xlsx` (SGC-CRP-2026)
+
+Register columns: CÓDIGO DE PROBETA | UBICACIÓN | ESTRUCTURA/ELEMENTO | F'C (kg/cm²) | FECHA DE
+MUESTREO | EDAD | FECHA DE ROTURA | F'C a "x" días (kg/cm²) | RESISTENCIA AL F'C (%) | DESCRIPCIÓN.
+EDAD = rotura − muestreo (computed). Real code naming (f'c=210 rows): `M-13-1` (muro C.A. 13-1),
+`Z-M13-01` (zapata), `M-ALETA-AL3` / `M-C.ENT-AL3` / `Z-CAJA ENT3` (alcantarilla 3+315),
+`Z-AL2-C.ENT` (alcantarilla 2, 1+080), `M-ALC-2` (3+080) → prefix `M-`=muro, `Z-`=zapata + element tag.
+Signatures: Ing. RESIDENTE · ESPECIALISTA CALIDAD · ESTRUCTURISTA-SUPERVISOR · SUPERVISOR DE OBRA
+(+ RESPONSABLE DE CAMPO).
+
+### A.6 LIBERACIÓN DE ESTRUCTURAS (CA Yee) — `PROTOCOLO CA YEE.xlsx` (Rev. 01)
+
+Common header: ESTRUCTURA · ELEMENTO ESTRUCTURAL · UBICACIÓN · PROGRESIVAS · MARGEN · NORMA DE
+REFERENCIA · DOCUMENTO DE REFERENCIA (plano N°, referenciales, cambio de ingeniería).
+
+**GDC-PLE-2026 (Encofrado)** — normas NTE G.050 + NTE E.060: alineamiento checklist (1 Eje transversal,
+2 Eje longitudinal, CONFORME Sí/No) + 3.00 Verificación del encofrado — puntos de control (NO/SÍ +
+COMENTARIOS): Material (madera o metal) · Condición · Limpieza de formas · Forma y dimensiones ·
+Apuntamiento y fijación · Aplicación del desmoldante · Alineamiento · Verticalidad · Nivel de vaciado
+ref. +/- 0.00.
+
+**GDC-PLA-2026 (Aceros)** — normas ASTM A615-G60, NTP 341.031 G60, NTE E.060, columns SI/NO/NA/OBS:
+1.01 Limpieza (corrosión, concreto, grasa) · 1.02 Calidad de acero (Norma ASTM, grado, marca) ·
+1.03 Diámetro de varilla (pulg), liso/corrugado · 1.04 Longitud de traslape (cm) · 1.05 Longitud de
+gancho (cm) · 1.06 Radio de doblez (cm) · 1.07 Espaciamiento en barras (cm) · 1.08 Alambre de amarre ·
+1.09 Soportes recubrimiento contra base (cm) · 1.10 Soportes recubrimiento lateral (cm) ·
+1.11 Verticalidad (plomada) · 1.12 Horizontalidad (alineamiento) · 2.00 Comentarios/Observaciones/Croquis.
+
+**GDC-PLV-2026 (Vaciado)** — INFORMACIÓN TÉCNICA (SI/NO/OBS): 1 Vaciado para SOLADO/CONCRETO SIMPLE/
+CONCRETO ARMADO · 2 f'c cumple EETT (210 kg/cm²) · 3 Diámetro máximo de agregados · 4 Acero y encofrado
+correctamente instalados · 5 Espaciamiento entre barras (cm) · 6 SLUMP según EETT · 7 Aditivos
+requeridos. + HORARIO Y CONDICIONES CLIMÁTICAS (clima despejado/soleado/nublado · turno día/noche ·
+inicio/término del vaciado) + DETALLES.
+
+Signatures: RESIDENTE DE OBRA · SUPERVISOR DE OBRA / ESPECIALISTA DE CALIDAD EJECUCIÓN ·
+ESTRUCTURAS-SUPERVISIÓN / ESPECIALISTA DE CALIDAD SUPERVISIÓN.
+
+### A.7 Auxiliary registers
+
+- **`INGRESO DE CONCRETO PREMEZCLADO TITAN.xlsx`:** ITEM | FECHA | MATERIAL | CANT (m³) | N° O/ENT
+  (guía) | PLACA → supplier reconciliation; the natural seed for `mixer_loads` backfill.
+- **`Cronograma_Progresivas.xlsx` / `LLENADO POR DIAS.xlsx`:** Carril | Progresiva Inicial |
+  Progresiva Final | Día Programado | Color (+ Cubos m³) → pour schedule; source of the silent chainage
+  prefill (F3) and of the steel-template "VACIADOS REAL/PARA PROTOCOLOS" annex columns.
+
+---
+
 *References: PRD_PROTOKOL.md, TECH_SPEC.md (PROTOKOL v2.4), CRASH_TECH_SPEC.md, PROTOCOLOS.md,
 FEEDBACK_DAVID.md, CHAT_GCALIDAD_RESUMEN.md, EXPEDIENTE_CALIDAD.md, ANALISIS_VISUAL_OBRA.md,
-docs/originales/CRASH_AUDITORIA_v1, PROTOKOL_AUDITORIA_II, PROTOKOL_AUDITORIA_III.*
+docs/originales/CRASH_AUDITORIA_v1, PROTOKOL_AUDITORIA_II, PROTOKOL_AUDITORIA_III, and the extracted
+formats in docs/originales/protocolos_david/ (PAVIMENTO_ENCOFRADO_MI, PAVIMENTO_ACERO_MI,
+PAVIMENTO_CONCRETO_MI, PRO-TOPOGRAFIA-2026, GR-PROBETA-2026, PROTOCOLO CA YEE, PLANO_CLAVE.pdf).*

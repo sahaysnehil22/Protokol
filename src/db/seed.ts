@@ -277,40 +277,68 @@ export function seedDatabase(db: DatabaseSync): void {
   `);
 
   const checklistItems = [
-    // COMPACTION
-    { id: 'chk_comp_1', act: 'COMPACTION', sec: '1. Material y Cantera', text: 'Material granular de cantera cumple con especificaciones técnicas del expediente y certificado de laboratorio.', order: 1 },
-    { id: 'chk_comp_2', act: 'COMPACTION', sec: '2. Preparación', text: 'Espesor de capa suelta verificado antes de iniciar el pase del rodillo compactador.', order: 2 },
-    { id: 'chk_comp_3', act: 'COMPACTION', sec: '3. Ensayos de Campo', text: 'Contenido de humedad de la muestra dentro de la tolerancia óptima (±1.5%).', order: 3 },
-    { id: 'chk_comp_4', act: 'COMPACTION', sec: '3. Ensayos de Campo', text: 'Densidad in-situ alcanza ≥100% de la máxima densidad seca del ensayo Proctor Modificado.', order: 4 },
-    { id: 'chk_comp_5', act: 'COMPACTION', sec: '4. Terminación', text: 'Superficie compactada uniforme, libre de ahuellamientos, fisuras o zonas blandas.', order: 5 },
+    // FORMWORK (GDC-PDE-2026, Rev. 001) - Verbatim from 02. PAVIMENTO_ENCOFRADO_MI.xlsx
+    { id: 'chk_form_101', act: 'FORMWORK', sec: '1. DESCRIPCION DE ACTIVIDAD', text: '1.01 ¿Tipo de encofrado es adecuado para el tipo de estructura a concretar?', order: 1 },
+    { id: 'chk_form_102', act: 'FORMWORK', sec: '1. DESCRIPCION DE ACTIVIDAD', text: '1.02 ¿Los accesorios empleados son los adecuados?', order: 2 },
+    { id: 'chk_form_103', act: 'FORMWORK', sec: '1. DESCRIPCION DE ACTIVIDAD', text: '1.03 ¿Ubicación correcta de los elementos embebidos?', order: 3 },
+    { id: 'chk_form_104', act: 'FORMWORK', sec: '1. DESCRIPCION DE ACTIVIDAD', text: '1.04 ¿Los puntales son los adecuados?', order: 4 },
+    { id: 'chk_form_201', act: 'FORMWORK', sec: '2. VERIFICACIÓN DE LOS MATERIALES', text: '2.01 Dimensiones del encofrado según los planos y las EETT.', order: 5 },
+    { id: 'chk_form_202', act: 'FORMWORK', sec: '2. VERIFICACIÓN DE LOS MATERIALES', text: '2.02 Distancias entre ejes y longitudes de encofrado.', order: 6 },
+    { id: 'chk_form_203', act: 'FORMWORK', sec: '2. VERIFICACIÓN DE LOS MATERIALES', text: '2.03 Verificación del alineamiento del encofrado.', order: 7 },
+    { id: 'chk_form_204', act: 'FORMWORK', sec: '2. VERIFICACIÓN DE LOS MATERIALES', text: '2.04 Verificación de la verticalidad o inclinación en los diferentes encofrados.', order: 8 },
 
-    // SURVEY
-    { id: 'chk_surv_1', act: 'SURVEY', sec: '1. Calibración', text: 'Estación total / nivel topográfico cuenta con certificado de calibración vigente.', order: 1 },
-    { id: 'chk_surv_2', act: 'SURVEY', sec: '2. Nivelación', text: 'Puntos de control topográfico (BM) y cotas de rasante verificados con tolerancia ≤ 1.0 cm.', order: 2 },
-    { id: 'chk_surv_3', act: 'SURVEY', sec: '3. Geometría', text: 'Alineamiento de eje y anchos de calzada y bermas conformes a secciones tipo.', order: 3 },
-    { id: 'chk_surv_4', act: 'SURVEY', sec: '3. Geometría', text: 'Pendientes longitudinales y bombeo transversal (S = 2.00%) verificados con plantilla.', order: 4 },
+    // STEEL (FO01PT03 / GDC-PLA-2026, Rev. 001) - Verbatim from 03. PAVIMENTO_ACERO_MI.xlsx
+    { id: 'chk_steel_101', act: 'STEEL', sec: '1. MATERIAL', text: '1.01 Calidad del acero / Fluencia corresponde con las EETT del proyecto', order: 1 },
+    { id: 'chk_steel_102', act: 'STEEL', sec: '1. MATERIAL', text: '1.02 ¿El acero instalado presenta certificado de calidad?', order: 2 },
+    { id: 'chk_steel_201', act: 'STEEL', sec: '2. GENERAL', text: '2.01 ¿Las armaduras de acero son del diámetro indicado en los planos ó EETT?', order: 3 },
+    { id: 'chk_steel_202', act: 'STEEL', sec: '2. GENERAL', text: '2.02 ¿Las intersecciones están aseguradas con alambre de amarre?', order: 4 },
+    { id: 'chk_steel_203', act: 'STEEL', sec: '2. GENERAL', text: '2.03 ¿Se colocaron dados de concreto en la base de la armadura?', order: 5 },
+    { id: 'chk_steel_204', act: 'STEEL', sec: '2. GENERAL', text: '2.04 ¿Se colocaron dados de concreto en los laterales de la armadura?', order: 6 },
+    { id: 'chk_steel_205', act: 'STEEL', sec: '2. GENERAL', text: '2.05 ¿La armadura de acero está alineada verticalmente y horizontalmente según EETT y planos?', order: 7 },
+    { id: 'chk_steel_206', act: 'STEEL', sec: '2. GENERAL', text: '2.06 ¿Las cotas del acero colocado están de acuerdo a los planos?', order: 8 },
+    { id: 'chk_steel_207', act: 'STEEL', sec: '2. GENERAL', text: '2.07 ¿Las distancias entre las varillas son las que se indican en los planos de referencia?', order: 9 },
+    { id: 'chk_steel_301', act: 'STEEL', sec: '3. OTROS', text: '3.01 ¿Las armaduras están libres de óxidos y sustancias extrañas en su superficie?', order: 10 },
+    { id: 'chk_steel_302', act: 'STEEL', sec: '3. OTROS', text: '3.02 ¿Todas las condiciones están dadas para dar conformidad a la armadura de acero?', order: 11 },
 
-    // STEEL
-    { id: 'chk_steel_1', act: 'STEEL', sec: '1. Materiales', text: 'El acero corrugado cuenta con certificado de calidad de fábrica y está libre de óxido escamoso o grasas.', order: 1 },
-    { id: 'chk_steel_2', act: 'STEEL', sec: '2. Colocación', text: 'Los diámetros y distribución de varillas coinciden con el plano estructural del expediente.', order: 2 },
-    { id: 'chk_steel_3', act: 'STEEL', sec: '2. Colocación', text: 'Espaciamiento entre barras de refuerzo verificado dentro de la tolerancia de diseño.', order: 3 },
-    { id: 'chk_steel_4', act: 'STEEL', sec: '3. Amarre y Apoyo', text: 'Recubrimiento libre de concreto asegurado con dados de mortero prefabricados (≥ 5 cm).', order: 4 },
-    { id: 'chk_steel_5', act: 'STEEL', sec: '3. Amarre y Apoyo', text: 'Intersecciones firmemente aseguradas con alambre negro de amarra #16 sin holguras.', order: 5 },
+    // CONCRETE (GDC-PCC-2026, Rev. 001) - Verbatim from 04. PAVIMENTO_CONCRETO_MI.xlsx
+    { id: 'chk_conc_101', act: 'CONCRETE', sec: '1. INSPECCIÓN PREVIA AL VACIADO', text: '1.1 ¿Se cuenta con diseño de mezcla aprobado por la Supervisión?', order: 1 },
+    { id: 'chk_conc_102', act: 'CONCRETE', sec: '1. INSPECCIÓN PREVIA AL VACIADO', text: '1.2 ¿La superficie del solado está limpia, libre de tierra, raíces y arena?', order: 2 },
+    { id: 'chk_conc_103', act: 'CONCRETE', sec: '1. INSPECCIÓN PREVIA AL VACIADO', text: '1.3 ¿El acero de refuerzo se encuentra limpio, libre de lubricantes y óxidos?', order: 3 },
+    { id: 'chk_conc_104', act: 'CONCRETE', sec: '1. INSPECCIÓN PREVIA AL VACIADO', text: '1.4 ¿La posición del acero de refuerzo y el encofrado ha sido verificado por el topógrafo?', order: 4 },
+    { id: 'chk_conc_105', act: 'CONCRETE', sec: '1. INSPECCIÓN PREVIA AL VACIADO', text: '1.5 ¿El espesor de recubrimiento de concreto cumple con lo indicado según ET?', order: 5 },
+    { id: 'chk_conc_106', act: 'CONCRETE', sec: '1. INSPECCIÓN PREVIA AL VACIADO', text: '1.6 ¿Se encuentra con una referencia para determinar el nivel de llenado de concreto?', order: 6 },
+    { id: 'chk_conc_107', act: 'CONCRETE', sec: '1. INSPECCIÓN PREVIA AL VACIADO', text: '1.7 ¿Se ha verificado la conformidad de las juntas?', order: 7 },
+    { id: 'chk_conc_108', act: 'CONCRETE', sec: '1. INSPECCIÓN PREVIA AL VACIADO', text: '1.8 ¿Se ha verificado la conformidad de los recubrimientos mínimos?', order: 8 },
+    { id: 'chk_conc_gate', act: 'CONCRETE', sec: '1. INSPECCIÓN PREVIA AL VACIADO', text: '¿Las condiciones están dadas para iniciar el concretado? (Punto de Control / Gate)', order: 9 },
+    { id: 'chk_conc_401', act: 'CONCRETE', sec: '4. VERIFICACIÓN POSTERIOR AL VACIADO', text: '1 Acabado superficial de acuerdo a lo especificado', order: 10 },
+    { id: 'chk_conc_402', act: 'CONCRETE', sec: '4. VERIFICACIÓN POSTERIOR AL VACIADO', text: '2 Nivel de aplomado del elemento de acuerdo a lo especificado', order: 11 },
+    { id: 'chk_conc_403', act: 'CONCRETE', sec: '4. VERIFICACIÓN POSTERIOR AL VACIADO', text: '3 Correcta posición final de los elementos embebidos', order: 12 },
+    { id: 'chk_conc_404', act: 'CONCRETE', sec: '4. VERIFICACIÓN POSTERIOR AL VACIADO', text: '4 Curado de la estructura concretada adecuado', order: 13 },
 
-    // FORMWORK
-    { id: 'chk_form_1', act: 'FORMWORK', sec: '1. Material y Estado', text: 'Paneles de encofrado (metálicos/madera) limpios, rectos y sin deformaciones previas.', order: 1 },
-    { id: 'chk_form_2', act: 'FORMWORK', sec: '2. Geometría y Cota', text: 'Dimensiones internas y cotas del encofrado conformes al plano (desviación ≤ 0.5 cm).', order: 2 },
-    { id: 'chk_form_3', act: 'FORMWORK', sec: '2. Geometría y Cota', text: 'Alineamiento y verticalidad verificados con plomada y nivel (tolerancia ≤ 5 mm).', order: 3 },
-    { id: 'chk_form_4', act: 'FORMWORK', sec: '3. Estanqueidad', text: 'Juntas selladas para evitar fuga de lechada durante el vaciado y vibrado.', order: 4 },
-    { id: 'chk_form_5', act: 'FORMWORK', sec: '4. Preparación', text: 'Desmoldante aplicado homogéneamente y fondo libre de aserrín o basura antes del vaciado.', order: 5 },
+    // SURVEY (GCO-PVT-2026, Rev. 01) - Verbatim from PRO-TOPOGRAFIA-2026 - copia.xlsx
+    { id: 'chk_surv_101', act: 'SURVEY', sec: '1. VERIFICACION PRELIMINAR', text: '1.1 Área limpia y sin obstáculos', order: 1 },
+    { id: 'chk_surv_102', act: 'SURVEY', sec: '1. VERIFICACION PRELIMINAR', text: '1.2 Área de trabajo señalizada', order: 2 },
+    { id: 'chk_surv_103', act: 'SURVEY', sec: '1. VERIFICACION PRELIMINAR', text: '1.3 Equipos y herramientas operativas', order: 3 },
+    { id: 'chk_surv_104', act: 'SURVEY', sec: '1. VERIFICACION PRELIMINAR', text: '1.4 Se cuenta con todos los permisos de seguridad (AST, etc.)', order: 4 },
+    { id: 'chk_surv_201', act: 'SURVEY', sec: '2. VERIFICACIÓN DURANTE LA ACTIVIDAD', text: '2.1 Ubicación de puntos auxiliares', order: 5 },
+    { id: 'chk_surv_202', act: 'SURVEY', sec: '2. VERIFICACIÓN DURANTE LA ACTIVIDAD', text: '2.2 Replanteo de linderos del terreno', order: 6 },
+    { id: 'chk_surv_203', act: 'SURVEY', sec: '2. VERIFICACIÓN DURANTE LA ACTIVIDAD', text: '2.3 Levantamiento topográfico', order: 7 },
+    { id: 'chk_surv_204', act: 'SURVEY', sec: '2. VERIFICACIÓN DURANTE LA ACTIVIDAD', text: '2.4 Trazo y replanteo de ejes', order: 8 },
+    { id: 'chk_surv_205', act: 'SURVEY', sec: '2. VERIFICACIÓN DURANTE LA ACTIVIDAD', text: '2.5 Distancia y proporcionalidad entre ejes', order: 9 },
+    { id: 'chk_surv_206', act: 'SURVEY', sec: '2. VERIFICACIÓN DURANTE LA ACTIVIDAD', text: '2.6 Colocación de niveles', order: 10 },
+    { id: 'chk_surv_207', act: 'SURVEY', sec: '2. VERIFICACIÓN DURANTE LA ACTIVIDAD', text: '2.7 Verticalidad y alineamiento', order: 11 },
+    { id: 'chk_surv_301', act: 'SURVEY', sec: '3. VERIFICACIONES POSTERIORES', text: '3.1 Recojo de equipos y herramientas', order: 12 },
+    { id: 'chk_surv_302', act: 'SURVEY', sec: '3. VERIFICACIONES POSTERIORES', text: '3.2 Limpieza del área de trabajo', order: 13 },
 
-    // CONCRETE
-    { id: 'chk_conc_1', act: 'CONCRETE', sec: '1. Autorización Previa', text: 'Liberación previa firmada de Topografía, Acero y Encofrado antes de autorizar el vaciado.', order: 1 },
-    { id: 'chk_conc_2', act: 'CONCRETE', sec: '2. Despacho Planta', text: 'Guía de remisión del proveedor (Concreto Titán / Carmix) verificada con volumen y resistencia f\'c.', order: 2 },
-    { id: 'chk_conc_3', act: 'CONCRETE', sec: '3. Ensayo de Cono', text: 'Prueba de asentamiento (Slump de Abrams) realizada por mixer dentro de 3.5" a 5.0".', order: 3 },
-    { id: 'chk_conc_4', act: 'CONCRETE', sec: '4. Muestreo de Probetas', text: 'Moldeo de 4 probetas cilíndricas por mixer en moldes normalizados con rotulado indeleble.', order: 4 },
-    { id: 'chk_conc_5', act: 'CONCRETE', sec: '5. Colocación y Vibrado', text: 'Vibrado mecánico adecuado sin tocar el acero de refuerzo ni producir segregación.', order: 5 },
-    { id: 'chk_conc_6', act: 'CONCRETE', sec: '6. Curado', text: 'Aplicación inmediata de curador químico y/o mantas de yute húmedas según EG-2013.', order: 6 }
+    // COMPACTION (GDC-PCS-2026, Rev. 001) - Suelos y Pavimentos per EG-2013 / GORE Ayacucho
+    { id: 'chk_comp_101', act: 'COMPACTION', sec: '1. MATERIAL Y CANTERA', text: '1.1 Material granular de cantera cumple con especificaciones técnicas del expediente y ensayos de laboratorio (CBR, granulometría, límites de Atterberg)', order: 1 },
+    { id: 'chk_comp_102', act: 'COMPACTION', sec: '1. MATERIAL Y CANTERA', text: '1.2 Cantera autorizada y material libre de materia orgánica o sobretamaños > 2"', order: 2 },
+    { id: 'chk_comp_201', act: 'COMPACTION', sec: '2. PREPARACIÓN Y COLOCACIÓN', text: '2.1 Espesor de capa suelta verificado antes de iniciar el pase del rodillo compactador (máx. 20-25 cm)', order: 3 },
+    { id: 'chk_comp_202', act: 'COMPACTION', sec: '2. PREPARACIÓN Y COLOCACIÓN', text: '2.2 Humedad de mezclado homogénea y dentro de la tolerancia óptima del ensayo Proctor Modificado (±1.5%)', order: 4 },
+    { id: 'chk_comp_301', act: 'COMPACTION', sec: '3. CONTROL DE COMPACTACIÓN Y ENSAYOS', text: '3.1 Grado de compactación in-situ alcanza ≥100% de la máxima densidad seca (MDS) del Proctor Modificado', order: 5 },
+    { id: 'chk_comp_302', act: 'COMPACTION', sec: '3. CONTROL DE COMPACTACIÓN Y ENSAYOS', text: '3.2 Ensayos de cono de arena o densímetro nuclear realizados con frecuencia requerida por EG-2013', order: 6 },
+    { id: 'chk_comp_401', act: 'COMPACTION', sec: '4. TERMINACIÓN Y GEOMETRÍA', text: '4.1 Superficie compactada uniforme, libre de ahuellamientos, fisuras o zonas blandas', order: 7 },
+    { id: 'chk_comp_402', act: 'COMPACTION', sec: '4. TERMINACIÓN Y GEOMETRÍA', text: '4.2 Cotas y pendientes transversales verificadas conforme al plano de rasante', order: 8 }
   ];
 
   for (const item of checklistItems) {
