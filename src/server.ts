@@ -29,7 +29,16 @@ export function createApp(dbInstance?: any) {
 
   // S-3: security headers. CSP is disabled for now because the PWA uses inline
   // styles extensively; enabling CSP requires a style-attribute refactor first.
-  app.use(helmet({ contentSecurityPolicy: false }));
+  // CORP/COOP disabled 2026-10-03: cross-origin-resource-policy: same-origin
+  // broke ES module loading through the service worker in production
+  // (Chromium refused to evaluate the app module). Revisit with COEP/CORP
+  // tuning once module delivery is verified stable.
+  app.use(helmet({
+    contentSecurityPolicy: false,
+    crossOriginResourcePolicy: false,
+    crossOriginOpenerPolicy: false,
+    originAgentCluster: false,
+  }));
   app.use(cookieParser());
 
   // Sync with Supabase Cloud if configured
