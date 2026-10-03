@@ -237,7 +237,15 @@ export class SupabaseSyncService {
         whatsapp_recipients: project.whatsapp_recipients || null,
         sampling_basis: project.sampling_basis || 'PER_TRUCK',
         cylinders_per_truck: project.cylinders_per_truck || 4,
-        default_design_fc: project.default_design_fc || 210
+        default_design_fc: project.default_design_fc || 210,
+        // Production-readiness auth fields (2026-10-03): centralized project
+        // PIN hash, ownership, archive state, and PIN lockout counters.
+        access_pin_hash: project.access_pin_hash || null,
+        owner_device_token: project.owner_device_token || null,
+        is_archived: project.is_archived ? 1 : 0,
+        archived_at: project.archived_at || null,
+        pin_attempts: project.pin_attempts || 0,
+        pin_locked_until: project.pin_locked_until || null
       });
 
       // 2. Insert Criteria
