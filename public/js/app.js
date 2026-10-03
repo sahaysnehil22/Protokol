@@ -19,11 +19,19 @@ class App {
     this.drawerContainer = document.getElementById('queue-drawer');
     this.drawerPanel = document.getElementById('queue-drawer-panel');
     this.langToggleBtn = document.getElementById('btn-lang-toggle');
+    this.headerSearchWrap = document.getElementById('header-search');
+    this.headerSearchInput = document.getElementById('header-search-input');
+    this.headerSearchBtn = document.getElementById('btn-header-search');
+    this.headerSearchHandler = null;
+    this.headerSearchExpanded = false;
 
     this.session = null;
     this.currentView = 'portal';
     this.currentParams = {};
     this.lastSubmissionResult = null;
+
+    // Exposed so views (e.g. project portal) can register a header search handler.
+    window.__protokolApp = this;
   }
 
   async init() {
@@ -72,6 +80,7 @@ class App {
     try {
       this.bindLanguageSwitcher();
       this.bindBrandLink();
+      this.setupHeaderSearch();
     } catch (e) {
       console.warn('[APP] bindings fallaron:', e);
     }
@@ -111,6 +120,59 @@ class App {
         e.preventDefault();
         this.navigateTo('portal');
       });
+    }
+  }
+
+  // Expandable header search. Views register a filter callback via
+  // setHeaderSearchHandler(); the icon is only visible while a handler exists.
+  setupHeaderSearch() {
+    if (!this.headerSearchBtn || !this.headerSearchInput) return;
+
+    this.headerSearchBtn.addEventListener('click', () => {
+      if (!this.headerSearchExpanded) {
+        this.headerSearchExpanded = true;
+        this.headerSearchInput.style.display = 'block';
+        requestAnimationFrame(() => {
+          this.headerSearchInput.style.width = '150px';
+          this.headerSearchInput.style.opacity = '1';
+        });
+        this.headerSearchBtn.innerHTML = '✕';
+        setTimeout(() => this.headerSearchInput.focus(), 60);
+      } else {
+        this.collapseHeaderSearch();
+      }
+    });
+
+    this.headerSearchInput.addEventListener('input', (e) => {
+      if (this.headerSearchHandler) this.headerSearchHandler(e.target.value);
+    });
+
+    this.headerSearchInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') this.collapseHeaderSearch();
+    });
+  }
+
+  collapseHeaderSearch() {
+    if (!this.headerSearchExpanded) return;
+    this.headerSearchExpanded = false;
+    this.headerSearchInput.style.width = '0';
+    this.headerSearchInput.style.opacity = '0';
+    setTimeout(() => {
+      this.headerSearchInput.style.display = 'none';
+      this.headerSearchInput.value = '';
+    }, 220);
+    this.headerSearchBtn.innerHTML = '🔍';
+    if (this.headerSearchHandler) this.headerSearchHandler('');
+  }
+
+  setHeaderSearchHandler(fn, placeholder) {
+    this.headerSearchHandler = fn || null;
+    if (this.headerSearchExpanded) this.collapseHeaderSearch();
+    if (this.headerSearchWrap) {
+      this.headerSearchWrap.style.display = fn ? 'flex' : 'none';
+    }
+    if (fn && placeholder && this.headerSearchInput) {
+      this.headerSearchInput.placeholder = placeholder;
     }
   }
 
@@ -179,6 +241,8 @@ class App {
     this.currentView = viewName;
     this.currentParams = params;
     this.mainContainer.innerHTML = '';
+    // Header search belongs to the portal only; views re-register if needed.
+    this.setHeaderSearchHandler(null);
 
     switch (viewName) {
       case 'portal':

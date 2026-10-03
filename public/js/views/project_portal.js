@@ -21,14 +21,7 @@ export async function renderProjectPortalView(container, onSelectProject, onOpen
         </button>
       </div>
 
-      <div style="margin-top: 18px; display: flex; gap: 10px;">
-        <input
-          type="text"
-          id="portal-search"
-          class="form-input"
-          placeholder="${t('portal.search')}"
-          style="font-size: 13px; padding-left: 12px; flex: 1;"
-        />
+      <div style="margin-top: 18px; display: flex; justify-content: flex-end;">
         <button id="btn-toggle-archived" class="btn btn-outline" style="font-size: 12px; white-space: nowrap;">
           📦 ${t('portal.show_archived')}
         </button>
@@ -59,7 +52,6 @@ export async function renderProjectPortalView(container, onSelectProject, onOpen
   `;
 
   const projectsContainer = container.querySelector('#portal-projects-list');
-  const searchInput = container.querySelector('#portal-search');
   const createBtn = container.querySelector('#btn-portal-create');
   const toggleArchivedBtn = container.querySelector('#btn-toggle-archived');
   const modal = container.querySelector('#archive-modal');
@@ -250,8 +242,10 @@ export async function renderProjectPortalView(container, onSelectProject, onOpen
     loadProjects();
   });
 
-  searchInput.addEventListener('input', (e) => {
-    const q = e.target.value.toLowerCase().trim();
+  // Header search (🔍 icon in the app header): filter the project list.
+  // Registered here so it only appears on the portal view.
+  function applySearchFilter(rawQuery) {
+    const q = String(rawQuery || '').toLowerCase().trim();
     if (!q) { renderProjects(allProjects); return; }
     const filtered = allProjects.filter(p =>
       (p.id && p.id.toLowerCase().includes(q)) ||
@@ -261,7 +255,10 @@ export async function renderProjectPortalView(container, onSelectProject, onOpen
       (p.road_section && p.road_section.toLowerCase().includes(q))
     );
     renderProjects(filtered);
-  });
+  }
+  if (window.__protokolApp) {
+    window.__protokolApp.setHeaderSearchHandler(applySearchFilter, t('portal.search'));
+  }
 
   loadProjects();
 }

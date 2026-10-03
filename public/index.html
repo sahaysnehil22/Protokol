@@ -30,6 +30,20 @@
 
     <!-- Header Actions -->
     <div style="display: flex; align-items: center; gap: 8px;">
+      <!-- Expandable header search (visible on portal view only) -->
+      <div id="header-search" style="display: none; align-items: center; gap: 4px;">
+        <input
+          type="text"
+          id="header-search-input"
+          class="form-input"
+          autocomplete="off"
+          style="display: none; width: 0; opacity: 0; transition: width 0.22s ease, opacity 0.22s ease; font-size: 13px; height: 32px; min-height: 32px; border-radius: 16px; padding: 0 12px;"
+        />
+        <button id="btn-header-search" class="btn btn-outline" title="Buscar proyectos"
+          style="min-height: 32px; height: 32px; width: 32px; padding: 0; font-size: 14px; border-radius: 16px; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+          🔍
+        </button>
+      </div>
       <!-- Language Switcher -->
       <button id="btn-lang-toggle" class="btn btn-outline" style="min-height: 32px; height: 32px; padding: 0 10px; font-size: 11px; font-weight: 800; border-radius: 16px;">
         EN
