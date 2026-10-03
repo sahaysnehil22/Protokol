@@ -132,39 +132,11 @@ export function renderProjectSetupView(container, onProjectCreated, onCancel) {
   const addTechBtn = container.querySelector('#btn-add-tech-row');
   let engineersList = [
     {
-      name: 'Ing. David Valdez Ochoa',
-      role: 'Quality Specialist',
+      name: '',
+      role: '',
       cip: '',
       pin: '',
-      whatsapp: '+51966000001'
-    },
-    {
-      name: 'Ing. Cristian Manuel Torres Salinas',
-      role: 'Quality Specialist',
-      cip: '260873',
-      pin: '',
-      whatsapp: '+51966000009'
-    },
-    {
-      name: 'Ing. Teodoro Manuel Huamancusi Quispe',
-      role: 'Supervisor',
-      cip: '53548',
-      pin: '',
-      whatsapp: '+51966000006'
-    },
-    {
-      name: 'Ing. Edison Cuadros Garcia',
-      role: 'Site Resident',
-      cip: '302775',
-      pin: '',
-      whatsapp: '+51966000002'
-    },
-    {
-      name: 'Ing. Roly Conocachi Huamani',
-      role: 'Structures Specialist',
-      cip: '76843',
-      pin: '',
-      whatsapp: '+51966000007'
+      whatsapp: ''
     }
   ];
 
