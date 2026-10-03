@@ -1,11 +1,14 @@
 // PROTOKOL — View: 4-Step Guided Protocol Wizard
 // Supports v2.4 Dynamic Concrete Pour Architecture (1 to 20+ Ready-Mix Trucks)
 import { getDeviceLocation } from '../location.js';
-import { queueSubmission, storeLocalPhoto } from '../db.js';
+import { queueSubmission, storeLocalPhoto, getConfigItem } from '../db.js';
 import { t, getLanguage } from '../i18n.js';
 
 export async function renderProtocolFormView(container, activity, session, onCompleted, onCancel) {
   let currentStep = 1;
+  // R-2: one idempotency key per DRAFT. Retries / double-clicks reuse it, so
+  // the server dedupes instead of creating duplicate protocols.
+  const draftIdempotencyKey = `idemp_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
   let acknowledgedNC = false;
   const projectId = session.project_id || 'AY-728-001';
 
@@ -54,13 +57,29 @@ export async function renderProtocolFormView(container, activity, session, onCom
   } catch (e) {
     console.warn('Checklist templates fetch fallback:', e);
   }
+  if (checklistTemplates.length === 0) {
+    try {
+      const cached = await getConfigItem(`templates_${projectId}_${activity}`);
+      if (cached && cached.length > 0) {
+        checklistTemplates = cached;
+        checklistState = checklistTemplates.map(item => ({
+          template_item_id: item.id,
+          item_text: item.item_text,
+          section: item.section,
+          result: 'CUMPLE',
+          observation: ''
+        }));
+        console.log('📴 Using cached checklist templates (offline)');
+      }
+    } catch { /* no cached templates */ }
+  }
 
   // Initial concrete trucks state with discrete slump selector
   let trucksState = [
     {
       truck_number: 1,
-      mixer_id: '6D37',
-      delivery_note: 'GR-00412',
+      mixer_id: '',
+      delivery_note: '',
       supplier: 'Concreto Titán',
       slump: '4',
       slump_cm: '10.2',
@@ -72,8 +91,8 @@ export async function renderProtocolFormView(container, activity, session, onCom
 
   const formData = {
     activity,
-    chainage: '0+144',
-    panel: '15',
+    chainage: '',
+    panel: '',
     gps: { lat: -13.1588, lng: -74.2236, accuracy: 10 },
     measurements: {
       formwork_approved: true
@@ -1368,21 +1387,24 @@ export async function renderProtocolFormView(container, activity, session, onCom
           try {
             const compressed = await compressImage(file, 1280, 0.75);
             const photoId = `photo_client_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
+            const capturedAt = new Date().toISOString();
             const photoObj = {
               id: photoId,
               blob: compressed.blob,
-              dataUrl: compressed.dataUrl
+              dataUrl: compressed.dataUrl,
+              captured_at: capturedAt
             };
             formData.localPhotos.push(photoObj);
-            await storeLocalPhoto(photoId, compressed.blob, { gps: formData.gps, captured_at: new Date().toISOString() });
+            await storeLocalPhoto(photoId, compressed.blob, { gps: formData.gps, captured_at: capturedAt });
             renderStep();
           } catch (compErr) {
             console.warn('Compression error fallback:', compErr);
             const reader = new FileReader();
             reader.onload = async (event) => {
               const photoId = `photo_client_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
-              formData.localPhotos.push({ id: photoId, blob: file, dataUrl: event.target.result });
-              await storeLocalPhoto(photoId, file, { gps: formData.gps, captured_at: new Date().toISOString() });
+              const capturedAt = new Date().toISOString();
+              formData.localPhotos.push({ id: photoId, blob: file, dataUrl: event.target.result, captured_at: capturedAt });
+              await storeLocalPhoto(photoId, file, { gps: formData.gps, captured_at: capturedAt });
               renderStep();
             };
             reader.readAsDataURL(file);
@@ -1407,7 +1429,7 @@ export async function renderProtocolFormView(container, activity, session, onCom
         submitBtn.disabled = true;
         submitBtn.innerText = 'Enviando protocolo...';
 
-        const idempotencyKey = `idemp_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+        const idempotencyKey = draftIdempotencyKey;
         const lang = getLanguage();
 
         // 1. Strict Photos-First Order: If online, upload photos before submitting protocol
@@ -1422,7 +1444,7 @@ export async function renderProtocolFormView(container, activity, session, onCom
                 fd.append('gps_lat', String(formData.gps.lat));
                 fd.append('gps_lng', String(formData.gps.lng));
               }
-              fd.append('captured_at', new Date().toISOString());
+              fd.append('captured_at', p.captured_at || new Date().toISOString());
 
               const pRes = await fetch('/api/photos', { method: 'POST', body: fd });
               if (pRes.ok) {
@@ -1440,7 +1462,7 @@ export async function renderProtocolFormView(container, activity, session, onCom
         const payload = {
           project_id: projectId,
           device_token: session.device_token,
-          technician_pin: '1234',
+          technician_id: session.technician_id || undefined,
           activity,
           recorded_at: new Date().toISOString(),
           gps: formData.gps,

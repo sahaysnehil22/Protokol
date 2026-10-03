@@ -1,0 +1,47 @@
+# PROTOKOL — Render Blueprint (H-11: reproducible deploys)
+# Apply: Render Dashboard → Blueprints → New Blueprint Instance → this repo.
+# Secrets (HMAC_SECRET, PIN_SALT, Supabase, Twilio) are set in the dashboard,
+# never in this file.
+services:
+  - type: web
+    name: protokol
+    runtime: node
+    plan: free
+    region: oregon
+    buildCommand: npm ci && npx tsc
+    startCommand: node index.js
+    healthCheckPath: /api/health
+    autoDeploy: true
+    envVars:
+      - key: NODE_VERSION
+        value: 24
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 3000
+      # --- Set these in the Render dashboard (do NOT commit values) ---
+      - key: HMAC_SECRET
+        sync: false
+      - key: PIN_SALT
+        sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: TWILIO_ACCOUNT_SID
+        sync: false
+      - key: TWILIO_AUTH_TOKEN
+        sync: false
+      - key: TWILIO_FROM_NUMBER
+        sync: false
+      - key: WHATSAPP_CHANNEL
+        value: TWILIO
+      - key: CORS_ORIGINS
+        value: https://protokol-c8eb.onrender.com
+    # NOTE (H-11): the free plan has EPHEMERAL disk. SQLite, local photos and
+    # local PDFs do NOT survive deploys/restarts. Mitigations in place:
+    #   - photos ALSO go to Supabase Storage when configured (D-06),
+    #   - protocols are mirrored to Supabase Postgres when configured (R4),
+    #   - PDFs are regenerable from sealed records (generateProtocolPdf).
+    # For real persistence add a Render Disk (paid) or move primary storage
+    # to Postgres (Part-4 multi-tenant phase).

@@ -6,17 +6,20 @@ import { ValidationService } from '../src/services/validation.service.js';
 import { PhotoService } from '../src/services/photo.service.js';
 import { OverdueService } from '../src/services/overdue.service.js';
 import { t, setLanguage, getLanguage } from '../public/js/i18n.js';
+import { authedAgent } from './helpers.js';
 
 describe('PROTOKOL Phase 0 — v2.4 Architecture & Dynamic Project Configuration Test Suite', () => {
   let db: DatabaseSync;
   let app: any;
+  let agent: any;
 
-  beforeEach(() => {
+  beforeEach(async () => {
     // Fresh in-memory database with full schema and seed data for each test
     db = new DatabaseSync(':memory:');
     db.exec('PRAGMA foreign_keys = ON;');
     const instance = createApp(db);
     app = instance.app;
+    agent = await authedAgent(app);
   });
 
   afterEach(() => {
@@ -27,10 +30,11 @@ describe('PROTOKOL Phase 0 — v2.4 Architecture & Dynamic Project Configuration
   // 1. Create a New Project (Requirement 19.1)
   // =========================================================================
   it('19.1: Admin can create a new project with custom configuration', async () => {
-    const res = await request(app)
+    const res = await agent
       .post('/api/projects')
       .send({
         id: 'PROJ-CUSCO-101',
+        access_pin: 'test-pin-1234',
         name: 'Pavimentación Urbana San Jerónimo',
         contract_number: 'N° 45-2026-MUNICUSCO',
         entity: 'Municipalidad de San Jerónimo',
@@ -62,16 +66,18 @@ describe('PROTOKOL Phase 0 — v2.4 Architecture & Dynamic Project Configuration
   // =========================================================================
   it('19.2: Admin can configure custom criteria for a project', async () => {
     // Create project first
-    await request(app).post('/api/projects').send({
+    await agent.post('/api/projects').send({
       id: 'PROJ-TEST-CRIT',
+        access_pin: 'test-pin-1234',
       name: 'Obra de Prueba Criterios',
       contract_number: 'N° 01-2026',
       entity: 'MTC',
       execution_mode: 'Contrata'
     });
+    const projAgent = await authedAgent(app, 'PROJ-TEST-CRIT', 'test-pin-1234');
 
     // Add custom slump criteria: 5.0 to 8.0 cm
-    const critRes = await request(app)
+    const critRes = await projAgent
       .post('/api/projects/PROJ-TEST-CRIT/criteria')
       .send({
         activity: 'CONCRETE',
@@ -86,7 +92,7 @@ describe('PROTOKOL Phase 0 — v2.4 Architecture & Dynamic Project Configuration
     expect(critRes.status).toBe(201);
 
     // Fetch criteria
-    const listRes = await request(app).get('/api/projects/PROJ-TEST-CRIT/criteria');
+    const listRes = await projAgent.get('/api/projects/PROJ-TEST-CRIT/criteria');
     expect(listRes.status).toBe(200);
     expect(listRes.body.length).toBe(1);
     expect(listRes.body[0].min_value).toBe(5.0);
@@ -97,15 +103,17 @@ describe('PROTOKOL Phase 0 — v2.4 Architecture & Dynamic Project Configuration
   // 3. Create Technicians for Project (Requirement 19.3)
   // =========================================================================
   it('19.3: Create technicians for a project with PIN hashing', async () => {
-    await request(app).post('/api/projects').send({
+    await agent.post('/api/projects').send({
       id: 'PROJ-TECH-01',
+        access_pin: 'test-pin-1234',
       name: 'Obra Tecnicos',
       contract_number: 'N° 02-2026',
       entity: 'GORE',
       execution_mode: 'Administración Directa'
     });
+    const projAgent = await authedAgent(app, 'PROJ-TECH-01', 'test-pin-1234');
 
-    const res = await request(app)
+    const res = await projAgent
       .post('/api/projects/PROJ-TECH-01/technicians')
       .send({
         name: 'Ing. Carlos Mendoza',
@@ -121,7 +129,7 @@ describe('PROTOKOL Phase 0 — v2.4 Architecture & Dynamic Project Configuration
     expect(res.body.pin_hash).toBeUndefined(); // PIN hash not exposed
 
     // Verify PIN verification endpoint
-    const authRes = await request(app)
+    const authRes = await projAgent
       .post('/api/technicians/verify-pin')
       .send({ project_id: 'PROJ-TECH-01', pin: '5678' });
 
@@ -134,8 +142,9 @@ describe('PROTOKOL Phase 0 — v2.4 Architecture & Dynamic Project Configuration
   // =========================================================================
   it('19.4 & 19.5: Protocol evaluates strictly against database criteria, not code constants', async () => {
     // Project with specific compaction criteria: >= 98.0%
-    await request(app).post('/api/projects').send({
+    await agent.post('/api/projects').send({
       id: 'PROJ-SOILS-98',
+        access_pin: 'test-pin-1234',
       name: 'Proyecto Suelos 98%',
       contract_number: 'N° 98-2026',
       entity: 'Municipalidad',
@@ -154,9 +163,10 @@ describe('PROTOKOL Phase 0 — v2.4 Architecture & Dynamic Project Configuration
         { name: 'Tec. Manuel', role: 'Soils Specialist', pin: '1234', device_token: 'dvc_soils_98' }
       ]
     });
+    const projAgent = await authedAgent(app, 'PROJ-SOILS-98', 'test-pin-1234');
 
     // 99.0% should PASS in this project (even though pilot requires 100%)
-    const res = await request(app)
+    const res = await projAgent
       .post('/api/protocols')
       .send({
         project_id: 'PROJ-SOILS-98',
@@ -182,8 +192,9 @@ describe('PROTOKOL Phase 0 — v2.4 Architecture & Dynamic Project Configuration
   it('19.6 & 19.7: Two different projects validate independently against their own criteria', async () => {
     // Project A (Pilot): Slump 8.9 - 12.7 cm
     // Project B: Slump 6.0 - 9.0 cm
-    await request(app).post('/api/projects').send({
+    await agent.post('/api/projects').send({
       id: 'PROJ-LOW-SLUMP',
+        access_pin: 'test-pin-1234',
       name: 'Canal de Concreto Seco',
       contract_number: 'N° 05-2026',
       entity: 'ANA',
@@ -213,11 +224,12 @@ describe('PROTOKOL Phase 0 — v2.4 Architecture & Dynamic Project Configuration
         { name: 'Ing. Supervisor B', role: 'Quality Specialist', pin: '1234', device_token: 'dvc_b' }
       ]
     });
+    const projAgent = await authedAgent(app, 'PROJ-LOW-SLUMP', 'test-pin-1234');
 
     const testSlump = 7.5; // Within Project B (6.0 - 9.0), Outside Pilot (8.9 - 12.7)
 
     // 1. Submit to Pilot Project -> Must FAIL (7.5 is below 8.9)
-    const pilotRes = await request(app)
+    const pilotRes = await agent
       .post('/api/protocols')
       .send({
         project_id: 'AY-728-001',
@@ -241,7 +253,7 @@ describe('PROTOKOL Phase 0 — v2.4 Architecture & Dynamic Project Configuration
     expect(pilotRes.body.verdict).toBe('FAIL');
 
     // 2. Submit same measurement to Project B -> Must PASS (7.5 is within 6.0 - 9.0)
-    const projBRes = await request(app)
+    const projBRes = await projAgent
       .post('/api/protocols')
       .send({
         project_id: 'PROJ-LOW-SLUMP',
@@ -269,7 +281,7 @@ describe('PROTOKOL Phase 0 — v2.4 Architecture & Dynamic Project Configuration
   // 8. Concrete Protocol with 1 Truck (Requirement 19.8)
   // =========================================================================
   it('19.8: Concrete protocol with 1 ready-mix truck validates and stores normalized record', async () => {
-    const res = await request(app)
+    const res = await agent
       .post('/api/protocols')
       .send({
         project_id: 'AY-728-001',
@@ -321,7 +333,7 @@ describe('PROTOKOL Phase 0 — v2.4 Architecture & Dynamic Project Configuration
       });
     }
 
-    const res = await request(app)
+    const res = await agent
       .post('/api/protocols')
       .send({
         project_id: 'AY-728-001',
@@ -354,7 +366,7 @@ describe('PROTOKOL Phase 0 — v2.4 Architecture & Dynamic Project Configuration
   // 10 & 14. Independent Slump Validation & One Truck Failing (Req 19.10 & 19.14)
   // =========================================================================
   it('19.10 & 19.14: Every truck has independent slump validation and failing truck creates linked NC', async () => {
-    const res = await request(app)
+    const res = await agent
       .post('/api/protocols')
       .send({
         project_id: 'AY-728-001',
@@ -407,7 +419,7 @@ describe('PROTOKOL Phase 0 — v2.4 Architecture & Dynamic Project Configuration
   // 11. Every Truck Has 4 Cylinders for Pilot Config (Requirement 19.11)
   // =========================================================================
   it('19.11: Every truck has 4 cylinders scheduled for pilot configuration', async () => {
-    const res = await request(app)
+    const res = await agent
       .post('/api/protocols')
       .send({
         project_id: 'AY-728-001',
@@ -441,7 +453,7 @@ describe('PROTOKOL Phase 0 — v2.4 Architecture & Dynamic Project Configuration
   // 12. 7-Day Cylinder Results (Requirement 19.12)
   // =========================================================================
   it('19.12: 7-day cylinder break recording maintains PROVISIONAL_PASS', async () => {
-    const pourRes = await request(app).post('/api/protocols').send({
+    const pourRes = await agent.post('/api/protocols').send({
       project_id: 'AY-728-001',
       device_token: 'dvc_pilot_qa_01',
       technician_pin: '1234',
@@ -459,7 +471,7 @@ describe('PROTOKOL Phase 0 — v2.4 Architecture & Dynamic Project Configuration
     const protocolId = pourRes.body.protocol_id;
 
     // Record 7-day cylinder result (215 kg/cm2, ~75% strength)
-    const cyl7Res = await request(app)
+    const cyl7Res = await agent
       .post(`/api/protocols/${protocolId}/cylinder-result`)
       .send({
         age_days: 7,
@@ -476,7 +488,7 @@ describe('PROTOKOL Phase 0 — v2.4 Architecture & Dynamic Project Configuration
   // 13. 28-Day Cylinder Results -> Final PASS (Requirement 19.13)
   // =========================================================================
   it('19.13: 28-day cylinder results passing design strength transitions protocol to PASS', async () => {
-    const pourRes = await request(app).post('/api/protocols').send({
+    const pourRes = await agent.post('/api/protocols').send({
       project_id: 'AY-728-001',
       device_token: 'dvc_pilot_qa_01',
       technician_pin: '1234',
@@ -496,7 +508,7 @@ describe('PROTOKOL Phase 0 — v2.4 Architecture & Dynamic Project Configuration
     const protocolId = pourRes.body.protocol_id;
 
     // Record first 28-day break >= 280 kg/cm2 (specimen 3)
-    const cyl28A = await request(app)
+    const cyl28A = await agent
       .post(`/api/protocols/${protocolId}/cylinder-result`)
       .send({
         age_days: 28,
@@ -509,7 +521,7 @@ describe('PROTOKOL Phase 0 — v2.4 Architecture & Dynamic Project Configuration
     expect(cyl28A.body.protocol_verdict).toBe('PROVISIONAL_PASS'); // Still 1 pending 28D specimen
 
     // Record second 28-day break >= 280 kg/cm2 (specimen 4 - completes 28D set)
-    const cyl28B = await request(app)
+    const cyl28B = await agent
       .post(`/api/protocols/${protocolId}/cylinder-result`)
       .send({
         age_days: 28,
@@ -529,7 +541,7 @@ describe('PROTOKOL Phase 0 — v2.4 Architecture & Dynamic Project Configuration
   // 15. Immutability Trigger Protection (Requirement 19.15)
   // =========================================================================
   it('19.15: Strict protocol immutability prevents unauthorized updates via SQL', async () => {
-    const pourRes = await request(app).post('/api/protocols').send({
+    const pourRes = await agent.post('/api/protocols').send({
       project_id: 'AY-728-001',
       device_token: 'dvc_pilot_qa_01',
       technician_pin: '1234',
@@ -566,11 +578,11 @@ describe('PROTOKOL Phase 0 — v2.4 Architecture & Dynamic Project Configuration
       idempotency_key: 'idemp_unique_key_101'
     };
 
-    const res1 = await request(app).post('/api/protocols').send(payload);
-    const res2 = await request(app).post('/api/protocols').send(payload);
+    const res1 = await agent.post('/api/protocols').send(payload);
+    const res2 = await agent.post('/api/protocols').send(payload);
 
     expect(res1.status).toBe(201);
-    expect(res2.status).toBe(201);
+    expect(res2.status).toBe(200); // duplicate: idempotent replay, not a new creation
     expect(res1.body.protocol_id).toBe(res2.body.protocol_id);
 
     const count = db.prepare('SELECT count(*) as count FROM protocols WHERE idempotency_key = ?').get('idemp_unique_key_101') as any;
@@ -582,7 +594,7 @@ describe('PROTOKOL Phase 0 — v2.4 Architecture & Dynamic Project Configuration
   // =========================================================================
   it('19.17: Photo metadata stored independently with SHA-256 hash', async () => {
     const photoBuffer = Buffer.from('test_jpeg_data_mock');
-    const res = await request(app)
+    const res = await agent
       .post('/api/photos')
       .attach('photo', photoBuffer, 'evidence.jpg')
       .field('gps_lat', '-13.1588')
@@ -621,8 +633,9 @@ describe('PROTOKOL Phase 0 — v2.4 Architecture & Dynamic Project Configuration
   // 20. Project Configuration Persistence (Requirement 19.20)
   // =========================================================================
   it('19.20: Project configuration persists and can be updated via API', async () => {
-    await request(app).post('/api/projects').send({
+    await agent.post('/api/projects').send({
       id: 'PROJ-PERSIST',
+        access_pin: 'test-pin-1234',
       name: 'Carretera Andina',
       contract_number: 'N° 77-2026',
       entity: 'GORE Cusco',
@@ -630,9 +643,10 @@ describe('PROTOKOL Phase 0 — v2.4 Architecture & Dynamic Project Configuration
       cylinders_per_truck: 4,
       default_design_fc: 210
     });
+    const projAgent = await authedAgent(app, 'PROJ-PERSIST', 'test-pin-1234');
 
     // Update configuration
-    const patchRes = await request(app)
+    const patchRes = await projAgent
       .patch('/api/projects/PROJ-PERSIST')
       .send({
         cylinders_per_truck: 5,
@@ -653,8 +667,9 @@ describe('PROTOKOL Phase 0 — v2.4 Architecture & Dynamic Project Configuration
   // =========================================================================
   it('19.21: No pilot configuration leaks into newly created projects', async () => {
     // Project with its own slump (3.0 - 5.0 cm) and 8 cylinders
-    await request(app).post('/api/projects').send({
+    await agent.post('/api/projects').send({
       id: 'PROJ-ISOLATED',
+        access_pin: 'test-pin-1234',
       name: 'Pavimento Rígido Especial',
       contract_number: 'N° 99-2026-ESP',
       entity: 'Entidad Privada',
@@ -677,20 +692,21 @@ describe('PROTOKOL Phase 0 — v2.4 Architecture & Dynamic Project Configuration
         { name: 'Ing. Aislado', role: 'Quality Specialist', pin: '9999', device_token: 'dvc_iso' }
       ]
     });
+    const projAgent = await authedAgent(app, 'PROJ-ISOLATED', 'test-pin-1234');
 
     // Verify criteria does NOT contain pilot slump criteria (8.9 - 12.7)
-    const critRes = await request(app).get('/api/projects/PROJ-ISOLATED/criteria');
+    const critRes = await projAgent.get('/api/projects/PROJ-ISOLATED/criteria');
     expect(critRes.body.length).toBe(1);
     expect(critRes.body[0].min_value).toBe(3.0);
     expect(critRes.body[0].max_value).toBe(5.0);
 
     // Verify technicians do not include pilot technicians
-    const techRes = await request(app).get('/api/projects/PROJ-ISOLATED/technicians');
+    const techRes = await projAgent.get('/api/projects/PROJ-ISOLATED/technicians');
     expect(techRes.body.length).toBe(1);
     expect(techRes.body[0].name).toBe('Ing. Aislado');
 
     // Submit protocol in PROJ-ISOLATED: slump 4.0 should PASS, slump 10.0 (pilot valid) should FAIL
-    const passRes = await request(app).post('/api/protocols').send({
+    const passRes = await projAgent.post('/api/protocols').send({
       project_id: 'PROJ-ISOLATED',
       device_token: 'dvc_iso',
       technician_pin: '9999',
@@ -705,7 +721,7 @@ describe('PROTOKOL Phase 0 — v2.4 Architecture & Dynamic Project Configuration
     });
     expect(passRes.body.verdict).toBe('PROVISIONAL_PASS');
 
-    const failRes = await request(app).post('/api/protocols').send({
+    const failRes = await projAgent.post('/api/protocols').send({
       project_id: 'PROJ-ISOLATED',
       device_token: 'dvc_iso',
       technician_pin: '9999',
@@ -739,11 +755,11 @@ describe('PROTOKOL Phase 0 — v2.4 Architecture & Dynamic Project Configuration
   });
 
   it('Contracts 8.3 & 8.4: Status view returns aggregated summary and Dossier compiles master PDF', async () => {
-    const statusRes = await request(app).get('/api/projects/AY-728-001/status');
+    const statusRes = await agent.get('/api/projects/AY-728-001/status');
     expect(statusRes.status).toBe(200);
     expect(statusRes.body.project_id).toBe('AY-728-001');
 
-    const dossierRes = await request(app).get('/api/projects/AY-728-001/dossier');
+    const dossierRes = await agent.get('/api/projects/AY-728-001/dossier');
     expect(dossierRes.status).toBe(200);
     expect(dossierRes.body.dossier_url).toBe('/api/projects/AY-728-001/dossier.pdf');
   });
@@ -758,10 +774,11 @@ describe('PROTOKOL Phase 0 — v2.4 Architecture & Dynamic Project Configuration
     const default_design_fc = 280;
     const cylinders_per_truck = 4;
 
-    const createRes = await request(app)
+    const createRes = await agent
       .post('/api/projects')
       .send({
         id: 'PROY-2026-01',
+        access_pin: 'test-pin-1234',
         name: 'Mejoramiento Vial Tramo Ayacucho',
         contract_number: 'N° 102-2026-GORE',
         entity: 'Gobierno Regional',
@@ -819,13 +836,14 @@ describe('PROTOKOL Phase 0 — v2.4 Architecture & Dynamic Project Configuration
           }
         ]
       });
+    const projAgent = await authedAgent(app, 'PROY-2026-01', 'test-pin-1234');
 
     expect(createRes.status).toBe(201);
     expect(createRes.body.id).toBe('PROY-2026-01');
     expect(createRes.body.name).toBe('Mejoramiento Vial Tramo Ayacucho');
 
     // 2. Verify technician is registered
-    const techRes = await request(app).get('/api/projects/PROY-2026-01/technicians');
+    const techRes = await projAgent.get('/api/projects/PROY-2026-01/technicians');
     expect(techRes.status).toBe(200);
     expect(techRes.body.length).toBe(1);
     const tech = techRes.body[0];
@@ -834,7 +852,7 @@ describe('PROTOKOL Phase 0 — v2.4 Architecture & Dynamic Project Configuration
     expect(tech.device_token).toBeDefined();
 
     // 3. Authenticate engineer with PIN 1234
-    const authRes = await request(app)
+    const authRes = await projAgent
       .post('/api/technicians/verify-pin')
       .send({
         project_id: 'PROY-2026-01',
@@ -846,7 +864,7 @@ describe('PROTOKOL Phase 0 — v2.4 Architecture & Dynamic Project Configuration
     expect(authRes.body.device_token).toBe(tech.device_token);
 
     // 4. Submit concrete protocol conforming to the project criteria
-    const protoRes = await request(app)
+    const protoRes = await projAgent
       .post('/api/protocols')
       .send({
         project_id: 'PROY-2026-01',
@@ -885,7 +903,7 @@ describe('PROTOKOL Phase 0 — v2.4 Architecture & Dynamic Project Configuration
     expect(protoRes.body.protocol_id).toBeDefined();
 
     // 5. Verify status view for the new project reflects the conforming protocol
-    const status = await request(app).get('/api/projects/PROY-2026-01/status');
+    const status = await projAgent.get('/api/projects/PROY-2026-01/status');
     expect(status.status).toBe(200);
     expect(status.body.protocols.length).toBe(1);
     expect(status.body.summary.provisional).toBe(1);

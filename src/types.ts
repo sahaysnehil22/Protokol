@@ -125,7 +125,9 @@ export interface ProtocolRecord {
 export interface ProtocolSubmissionRequest {
   project_id: string;
   device_token: string;
-  technician_pin: string;
+  /** Submitter identity for box-1 auto-sign. Auth itself comes from the session
+   *  (project PIN verified at login); technician_pin is no longer accepted. */
+  technician_id?: string;
   activity: ActivityType;
   recorded_at: string;
   gps: GPSCoordinates;

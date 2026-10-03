@@ -19,7 +19,7 @@ export class SupabaseSyncService {
                 throw pErr;
             if (projects && projects.length > 0) {
                 const insertProj = db.prepare(`
-          INSERT OR REPLACE INTO projects (
+          INSERT OR IGNORE INTO projects (
             id, name, contract_number, entity, execution_mode,
             location, road_section, timezone, timezone_offset,
             whatsapp_recipients, sampling_basis, cylinders_per_truck, default_design_fc, created_at
@@ -35,7 +35,7 @@ export class SupabaseSyncService {
                 throw tErr;
             if (technicians && technicians.length > 0) {
                 const insertTech = db.prepare(`
-          INSERT OR REPLACE INTO technicians (
+          INSERT OR IGNORE INTO technicians (
             id, project_id, name, pin_hash, device_token, whatsapp, role, cip_number, created_at
           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         `);
@@ -64,14 +64,15 @@ export class SupabaseSyncService {
                 throw prErr;
             if (protocols && protocols.length > 0) {
                 const insertProto = db.prepare(`
-          INSERT OR REPLACE INTO protocols (
+          INSERT OR IGNORE INTO protocols (
             id, project_id, activity, chainage, panel, verdict,
-            measurements, technician_id, device_token, gps_lat, gps_lng,
-            recorded_at, integrity_hash, supersedes_protocol_id, created_at
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            measurements, technician_id, device_token, gps_lat, gps_lng, gps_source,
+            recorded_at, server_received_at, timezone_offset,
+            integrity_hash, supersedes_protocol_id, created_at
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `);
                 for (const pr of protocols) {
-                    insertProto.run(pr.id, pr.project_id, pr.activity, pr.chainage, pr.panel, pr.verdict, typeof pr.measurements === 'string' ? pr.measurements : JSON.stringify(pr.measurements), pr.technician_id, pr.device_token, pr.gps_lat, pr.gps_lng, pr.recorded_at, pr.integrity_hash, pr.supersedes_protocol_id || null, pr.created_at || new Date().toISOString());
+                    insertProto.run(pr.id, pr.project_id, pr.activity, pr.chainage, pr.panel, pr.verdict, typeof pr.measurements === 'string' ? pr.measurements : JSON.stringify(pr.measurements), pr.technician_id, pr.device_token, pr.gps_lat, pr.gps_lng, pr.gps_source || null, pr.recorded_at, pr.server_received_at || new Date().toISOString(), pr.timezone_offset || '-05:00', pr.integrity_hash, pr.supersedes_protocol_id || null, pr.created_at || new Date().toISOString());
                 }
             }
             // 5. Sync Concrete Trucks
@@ -80,7 +81,7 @@ export class SupabaseSyncService {
                 throw trErr;
             if (trucks && trucks.length > 0) {
                 const insertTruck = db.prepare(`
-          INSERT OR REPLACE INTO concrete_trucks (
+          INSERT OR IGNORE INTO concrete_trucks (
             id, protocol_id, truck_number, mixer_id, delivery_note,
             slump_cm, cylinders_cast, design_fc, slump_verdict, notes, created_at
           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -95,7 +96,7 @@ export class SupabaseSyncService {
                 throw cylErr;
             if (cylinders && cylinders.length > 0) {
                 const insertCyl = db.prepare(`
-          INSERT OR REPLACE INTO cylinders (
+          INSERT OR IGNORE INTO cylinders (
             id, protocol_id, truck_id, truck_number, specimen_number,
             cylinder_code, cast_date, test_date, age_days, strength_kgcm2,
             design_fc, lab, report_photo_id, status, verdict, created_at
@@ -173,7 +174,10 @@ export class SupabaseSyncService {
                 device_token: protocol.device_token,
                 gps_lat: protocol.gps_lat,
                 gps_lng: protocol.gps_lng,
+                gps_source: protocol.gps_source || null,
                 recorded_at: protocol.recorded_at,
+                server_received_at: protocol.server_received_at,
+                timezone_offset: protocol.timezone_offset,
                 integrity_hash: protocol.integrity_hash,
                 supersedes_protocol_id: protocol.supersedes_protocol_id || null
             });

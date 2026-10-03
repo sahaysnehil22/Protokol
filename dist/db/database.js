@@ -20,6 +20,9 @@ export function getDatabase(dbFilePath) {
         db.exec('PRAGMA journal_mode = WAL;');
     }
     db.exec('PRAGMA foreign_keys = ON;');
+    // R-5 (2026-10-03): wait instead of instantly failing on a locked DB when a
+    // second writer (backup, sync, another process) holds the lock.
+    db.exec('PRAGMA busy_timeout = 5000;');
     if (!dbFilePath) {
         dbInstance = db;
     }

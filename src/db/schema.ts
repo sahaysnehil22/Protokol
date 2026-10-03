@@ -25,6 +25,19 @@ export function initializeSchema(db: DatabaseSync): void {
       cylinders_per_truck INTEGER NOT NULL DEFAULT 4,
       default_design_fc REAL NOT NULL DEFAULT 210,
       metadata TEXT,
+      -- Production-readiness (2026-10-03): centralized project access PIN (two-tier
+      -- auth: project PIN = crew access, personal tech PIN = signing). NULL =
+      -- legacy project created before project PINs (falls back to per-tech PIN).
+      access_pin_hash TEXT,
+      -- Interim multi-user: device that created the project (owner). Full user
+      -- accounts replace this in the multi-tenant phase.
+      owner_device_token TEXT,
+      -- Archive (never hard-delete evidence): hidden from default listings.
+      is_archived INTEGER NOT NULL DEFAULT 0,
+      archived_at TEXT,
+      -- Wrong-PIN throttling for the centralized project PIN.
+      pin_attempts INTEGER NOT NULL DEFAULT 0,
+      pin_locked_until TEXT,
       updated_at TEXT,
       created_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
@@ -101,6 +114,9 @@ export function initializeSchema(db: DatabaseSync): void {
     CREATE TABLE IF NOT EXISTS photos (
       id TEXT PRIMARY KEY, -- ph_...
       protocol_id TEXT,    -- Linked upon protocol submission
+      -- Project scoping for IDOR protection on reads (2026-10-03). Set at
+      -- upload from the session; NULL = legacy photo uploaded before scoping.
+      project_id TEXT,
       storage_key TEXT NOT NULL,
       gps_lat REAL,
       gps_lng REAL,
@@ -124,6 +140,9 @@ export function initializeSchema(db: DatabaseSync): void {
       timezone_offset TEXT NOT NULL,
       gps_lat REAL NOT NULL,
       gps_lng REAL NOT NULL,
+      -- GPS provenance: 'DEVICE_GPS' or 'PILOT_DEFAULT' (marked pilot fallback).
+      -- Sealed at insert; rendered as a badge on the PDF (C-04/D-03).
+      gps_source TEXT,
       panel TEXT NOT NULL,
       chainage TEXT NOT NULL,
       measurements TEXT NOT NULL,      -- Deterministic JSON
@@ -147,7 +166,10 @@ export function initializeSchema(db: DatabaseSync): void {
     CREATE INDEX IF NOT EXISTS idx_protocols_chainage ON protocols(chainage, panel);
 
     -- Protocol Immutability Trigger: Prohibit modification of core data fields
-    CREATE TRIGGER IF NOT EXISTS trg_protocols_immutability
+    -- Immutability trigger: always reinstall the current version (DROP + CREATE)
+    -- so existing databases pick up extended protections (H-07, 2026-10-03).
+    DROP TRIGGER IF EXISTS trg_protocols_immutability;
+    CREATE TRIGGER trg_protocols_immutability
     BEFORE UPDATE ON protocols
     FOR EACH ROW
     BEGIN
@@ -172,6 +194,18 @@ export function initializeSchema(db: DatabaseSync): void {
           RAISE(ABORT, 'IMMUTABILITY_VIOLATION: Cannot modify technician')
         WHEN OLD.integrity_hash != NEW.integrity_hash THEN
           RAISE(ABORT, 'IMMUTABILITY_VIOLATION: Cannot modify integrity hash')
+        -- H-07 (2026-10-03): identity/provenance columns are sealed too. Post-seal
+        -- mutation of who submitted, when-notes, or dedupe keys = tampering.
+        WHEN OLD.device_token != NEW.device_token THEN
+          RAISE(ABORT, 'IMMUTABILITY_VIOLATION: Cannot modify device token')
+        WHEN OLD.notes != NEW.notes AND NOT (OLD.notes IS NULL AND NEW.notes IS NULL) THEN
+          RAISE(ABORT, 'IMMUTABILITY_VIOLATION: Cannot modify notes')
+        WHEN OLD.idempotency_key != NEW.idempotency_key AND NOT (OLD.idempotency_key IS NULL AND NEW.idempotency_key IS NULL) THEN
+          RAISE(ABORT, 'IMMUTABILITY_VIOLATION: Cannot modify idempotency key')
+        WHEN OLD.timezone_offset != NEW.timezone_offset THEN
+          RAISE(ABORT, 'IMMUTABILITY_VIOLATION: Cannot modify timezone offset')
+        WHEN OLD.gps_source != NEW.gps_source AND NOT (OLD.gps_source IS NULL AND NEW.gps_source IS NULL) THEN
+          RAISE(ABORT, 'IMMUTABILITY_VIOLATION: Cannot modify GPS source')
         -- Only permit verdict change from PROVISIONAL_PASS to PASS or FAIL
         WHEN OLD.verdict != 'PROVISIONAL_PASS' AND OLD.verdict != NEW.verdict THEN
           RAISE(ABORT, 'IMMUTABILITY_VIOLATION: Cannot change finalized verdict')
@@ -299,6 +333,31 @@ export function initializeSchema(db: DatabaseSync): void {
     );
 
     CREATE INDEX IF NOT EXISTS idx_schedules_overdue ON protocol_schedules(scheduled_at, notified_overdue_at);
+
+    -- 11. Sessions Table (S-1: cookie session auth, 2026-10-03)
+    -- One row per verified project-PIN login. Cookie value = id.
+    CREATE TABLE IF NOT EXISTS sessions (
+      id TEXT PRIMARY KEY,              -- sess_<32 hex>
+      project_id TEXT NOT NULL,
+      device_token TEXT NOT NULL,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      expires_at TEXT NOT NULL,
+      FOREIGN KEY (project_id) REFERENCES projects(id)
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_sessions_project ON sessions(project_id);
+    CREATE INDEX IF NOT EXISTS idx_sessions_expires ON sessions(expires_at);
+
+    -- 12. Project Members Table (interim multi-user, 2026-10-03)
+    -- A device becomes a member when it verifies the project PIN. Drives the
+    -- "my projects" dashboard filter until real user accounts exist.
+    CREATE TABLE IF NOT EXISTS project_members (
+      project_id TEXT NOT NULL,
+      device_token TEXT NOT NULL,
+      joined_at TEXT NOT NULL DEFAULT (datetime('now')),
+      PRIMARY KEY (project_id, device_token),
+      FOREIGN KEY (project_id) REFERENCES projects(id)
+    );
   `);
 
   // Safe migrations for preexisting databases
@@ -331,6 +390,13 @@ function runSafeMigrations(db: DatabaseSync): void {
     if (!projectCols.has('default_design_fc')) db.exec(`ALTER TABLE projects ADD COLUMN default_design_fc REAL NOT NULL DEFAULT 210;`);
     if (!projectCols.has('metadata')) db.exec(`ALTER TABLE projects ADD COLUMN metadata TEXT;`);
     if (!projectCols.has('updated_at')) db.exec(`ALTER TABLE projects ADD COLUMN updated_at TEXT;`);
+    // Production-readiness 2026-10-03: centralized project PIN, ownership, archive, lockout
+    if (!projectCols.has('access_pin_hash')) db.exec(`ALTER TABLE projects ADD COLUMN access_pin_hash TEXT;`);
+    if (!projectCols.has('owner_device_token')) db.exec(`ALTER TABLE projects ADD COLUMN owner_device_token TEXT;`);
+    if (!projectCols.has('is_archived')) db.exec(`ALTER TABLE projects ADD COLUMN is_archived INTEGER NOT NULL DEFAULT 0;`);
+    if (!projectCols.has('archived_at')) db.exec(`ALTER TABLE projects ADD COLUMN archived_at TEXT;`);
+    if (!projectCols.has('pin_attempts')) db.exec(`ALTER TABLE projects ADD COLUMN pin_attempts INTEGER NOT NULL DEFAULT 0;`);
+    if (!projectCols.has('pin_locked_until')) db.exec(`ALTER TABLE projects ADD COLUMN pin_locked_until TEXT;`);
   }
 
   // Technicians table migrations
@@ -359,6 +425,8 @@ function runSafeMigrations(db: DatabaseSync): void {
   if (protCols.size > 0) {
     if (!protCols.has('pdf_key')) db.exec(`ALTER TABLE protocols ADD COLUMN pdf_key TEXT;`);
     if (!protCols.has('subcontractor_id')) db.exec(`ALTER TABLE protocols ADD COLUMN subcontractor_id TEXT;`);
+    // C-04/D-03 (2026-10-03): GPS provenance sealed at insert.
+    if (!protCols.has('gps_source')) db.exec(`ALTER TABLE protocols ADD COLUMN gps_source TEXT;`);
   }
 
   // Concrete trucks table migrations
@@ -366,6 +434,13 @@ function runSafeMigrations(db: DatabaseSync): void {
   if (truckCols.size > 0) {
     if (!truckCols.has('slump')) db.exec(`ALTER TABLE concrete_trucks ADD COLUMN slump TEXT;`);
     if (!truckCols.has('supplier')) db.exec(`ALTER TABLE concrete_trucks ADD COLUMN supplier TEXT DEFAULT 'Concreto Titán';`);
+  }
+
+  // Photos table migrations
+  const photoCols = getTableColumns('photos');
+  if (photoCols.size > 0) {
+    // S-1 (2026-10-03): project scoping for photo reads.
+    if (!photoCols.has('project_id')) db.exec(`ALTER TABLE photos ADD COLUMN project_id TEXT;`);
   }
 
   // Nonconformances table migrations

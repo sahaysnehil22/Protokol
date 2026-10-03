@@ -61,6 +61,24 @@ export async function queueSubmission(payload) {
   });
 }
 
+// Update retry metadata / dead-letter status for a queued submission (M-04)
+export async function updateSubmissionMeta(idempotencyKey, patch) {
+  const db = await openLocalDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction('submissions', 'readwrite');
+    const store = tx.objectStore('submissions');
+    const req = store.get(idempotencyKey);
+    req.onsuccess = () => {
+      const rec = req.result;
+      if (!rec) return resolve(null);
+      store.put({ ...rec, ...patch });
+      tx.oncomplete = () => resolve(true);
+      tx.onerror = () => reject(tx.error);
+    };
+    req.onerror = () => reject(req.error);
+  });
+}
+
 // Retrieve pending submissions
 export async function getPendingSubmissions() {
   const db = await openLocalDB();

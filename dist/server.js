@@ -1,5 +1,7 @@
 import express from 'express';
 import cors from 'cors';
+import helmet from 'helmet';
+import cookieParser from 'cookie-parser';
 import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
@@ -8,6 +10,7 @@ import { getDatabase } from './db/database.js';
 import { initializeSchema } from './db/schema.js';
 import { seedDatabase } from './db/seed.js';
 import { createApiRouter } from './api/routes.js';
+import { createAuthRouter } from './api/auth.js';
 import { SupabaseSyncService } from './services/supabase_sync.service.js';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -16,6 +19,13 @@ export function createApp(dbInstance) {
     const app = express();
     const db = dbInstance || getDatabase();
     initializeSchema(db);
+    // Behind Render's TLS-terminating proxy: correct client IPs (rate limiting)
+    // and Secure cookies.
+    app.set('trust proxy', 1);
+    // S-3: security headers. CSP is disabled for now because the PWA uses inline
+    // styles extensively; enabling CSP requires a style-attribute refactor first.
+    app.use(helmet({ contentSecurityPolicy: false }));
+    app.use(cookieParser());
     // Sync with Supabase Cloud if configured
     SupabaseSyncService.syncFromSupabase(db).catch(err => {
         console.warn('⚠️ [SUPABASE] Error durante sincronización inicial:', err.message);
@@ -24,10 +34,28 @@ export function createApp(dbInstance) {
     if (process.env.SEED_DATABASE === 'true' || process.env.NODE_ENV === 'test') {
         seedDatabase(db);
     }
-    app.use(cors());
+    // S-2: CORS locked to known origins (env CORS_ORIGINS, comma-separated).
+    // Same-origin PWA traffic is unaffected; this blocks foreign sites from
+    // calling the API with the user's cookies.
+    const allowedOrigins = (process.env.CORS_ORIGINS ||
+        'https://protokol-c8eb.onrender.com,http://localhost:3000,http://127.0.0.1:3000')
+        .split(',').map(s => s.trim()).filter(Boolean);
+    app.use(cors({
+        origin: (origin, cb) => {
+            if (!origin || allowedOrigins.includes(origin))
+                return cb(null, true);
+            return cb(new Error('CORS: origin not allowed'));
+        },
+        credentials: true,
+    }));
     app.use(express.json({ limit: '10mb' }));
     app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+    // Health check (Render health checks + uptime monitors). Public.
+    app.get('/api/health', (_req, res) => {
+        res.status(200).json({ ok: true, service: 'protokol', time: new Date().toISOString() });
+    });
     // API Routes
+    app.use('/api', createAuthRouter(db));
     app.use('/api', createApiRouter(db));
     // Serve static files for PWA
     const publicDir = path.join(rootDir, 'public');

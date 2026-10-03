@@ -1,4 +1,4 @@
-const CACHE_NAME = 'protokol-cache-v2.6';
+const CACHE_NAME = 'protokol-cache-v3.0-prod-readiness';
 const ASSETS_TO_CACHE = [
   '/',
   '/index.html',

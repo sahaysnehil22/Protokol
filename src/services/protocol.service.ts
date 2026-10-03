@@ -1,4 +1,5 @@
 import { DatabaseSync } from 'node:sqlite';
+import crypto from 'crypto';
 import { config } from '../config.js';
 import {
   ProtocolSubmissionRequest,
@@ -55,6 +56,26 @@ export class ProtocolService {
       }
     }
 
+    // R-1 (2026-10-03): all DB writes below happen inside ONE transaction.
+    // BEGIN IMMEDIATE takes the write lock up-front so a concurrent submit
+    // blocks here instead of interleaving a check-then-insert race, and any
+    // mid-flow failure rolls back instead of leaving half-written records
+    // (protocol row without trucks, NC without protocol, ...).
+    // Side effects (notifications, PDF, cloud mirror) happen AFTER commit —
+    // never hold the DB lock across network I/O.
+    this.db.exec('BEGIN IMMEDIATE');
+    const pendingNcNotifications: any[] = [];
+    // Hoisted: assigned inside the transaction, consumed by post-commit side
+    // effects below (a `try {` block cannot leak `const`/`let` outward).
+    let protocolId!: string;
+    let verdict!: ProtocolVerdict;
+    let valResult!: any;
+    let verifiedTech!: any;
+    let concreteTrucks: ConcreteTruckInput[] = [];
+    let primaryNonconformanceId: string | null = null;
+    let pending: string[] = [];
+    try {
+
     // 2. Validate Project Existence
     const project = this.db.prepare(`
       SELECT * FROM projects WHERE id = ?
@@ -64,26 +85,33 @@ export class ProtocolService {
       throw new Error(`PROJECT_NOT_FOUND: Proyecto ${request.project_id} no registrado en el sistema.`);
     }
 
-    // 3. Identity Verification: Validate Technician PIN & Device for this Project
-    const tech = this.db.prepare(`
-      SELECT id, name, role, pin_hash, device_token
-      FROM technicians
-      WHERE project_id = ? AND (device_token = ? OR id = ?)
-    `).get(request.project_id, request.device_token, request.device_token) as any;
-
-    let verifiedTech = tech;
-    if (!verifiedTech) {
-      const allProjectTechs = this.db.prepare(`
-        SELECT id, name, role, pin_hash, device_token FROM technicians WHERE project_id = ?
-      `).all(request.project_id) as any[];
-
-      verifiedTech = allProjectTechs.find(t => verifyPin(request.technician_pin, t.pin_hash));
-    } else if (!verifyPin(request.technician_pin, verifiedTech.pin_hash)) {
-      throw new Error('AUTH_FAILED: PIN de técnico inválido.');
-    }
-
-    if (!verifiedTech) {
-      throw new Error('AUTH_FAILED: Técnico no autorizado para este proyecto o PIN incorrecto.');
+    // 3. Submitter identity (two-tier auth, 2026-10-03): project access was already
+    // verified by the session (project PIN at login, route-level assert). Here we
+    // only resolve WHO submitted, for box-1 auto-sign attribution. No PIN is
+    // accepted in this payload anymore (C-01: the old technician_pin fallback
+    // let anyone impersonate any tech with the shared demo PIN).
+    verifiedTech = null;
+    if (request.technician_id) {
+      verifiedTech = this.db.prepare(`
+        SELECT id, name, role, pin_hash, device_token
+        FROM technicians
+        WHERE project_id = ? AND id = ?
+      `).get(request.project_id, request.technician_id) as any;
+      if (!verifiedTech) {
+        throw new Error('UNKNOWN_TECHNICIAN: El técnico no pertenece a este proyecto.');
+      }
+    } else {
+      // No identity supplied: attribute to the first quality technician so the
+      // record keeps a valid box-1 binding, and mark attribution as implicit.
+      verifiedTech = this.db.prepare(`
+        SELECT id, name, role, pin_hash, device_token
+        FROM technicians
+        WHERE project_id = ?
+        ORDER BY rowid ASC LIMIT 1
+      `).get(request.project_id) as any;
+      if (!verifiedTech) {
+        throw new Error('NO_TECHNICIANS: El proyecto no tiene técnicos registrados.');
+      }
     }
 
     // 3.5. Enforce Photos-First Rule (§4.3.3): Verify all referenced photos exist on server
@@ -98,7 +126,7 @@ export class ProtocolService {
 
     // 4. Normalize Multi-Truck Payload for Concrete
     const measurements = { ...request.measurements };
-    let concreteTrucks: ConcreteTruckInput[] = [];
+    concreteTrucks = [];
 
     if (request.activity === 'CONCRETE') {
       const incomingTrucks = Array.isArray(measurements.trucks) && measurements.trucks.length > 0
@@ -151,14 +179,14 @@ export class ProtocolService {
     }
 
     // 5. Deterministic Validation against Database Criteria (Criteria as Data)
-    const valResult = this.validationService.validateMeasurements(
+    valResult = this.validationService.validateMeasurements(
       request.project_id,
       request.activity,
       measurements
     );
 
     // 6. Determine Verdict according to Domain State Machine
-    let verdict: ProtocolVerdict;
+    /* verdict hoisted above */
     if (!valResult.allPassed) {
       verdict = 'FAIL';
     } else if (request.activity === 'CONCRETE') {
@@ -182,11 +210,17 @@ export class ProtocolService {
       ? request.recorded_at.slice(-6)
       : (project.timezone_offset || config.defaultTimezoneOffset);
 
-    // 8. Generate Unique Protocol ID: PRT-YYYYMMDD-HHMM-PANEL
+    // 8. Generate Unique Protocol ID: PRT-YYYYMMDD-HHMMSS-PANEL-XXXX
+    // R-3 (2026-10-03): the old minute-granularity ID (PRT-YYYYMMDD-HHMM-PANEL)
+    // collided when two protocols for the same panel landed in the same minute
+    // (two techs, offline queue flush) → PRIMARY KEY conflict → 500. Seconds +
+    // 4 random hex chars make collisions practically impossible; the
+    // idempotency key remains the dedupe mechanism for true retries.
     const datePart = recordedAt.split('T')[0].replace(/-/g, '');
-    const timePart = (recordedAt.split('T')[1] || '00:00').substring(0, 5).replace(':', '');
+    const timePart = (recordedAt.split('T')[1] || '00:00:00').substring(0, 8).replace(/:/g, '');
     const panelPadded = request.panel.padStart(3, '0');
-    const protocolId = `PRT-${datePart}-${timePart}-${panelPadded}`;
+    const randSuffix = crypto.randomBytes(2).toString('hex').toUpperCase();
+    protocolId = `PRT-${datePart}-${timePart}-${panelPadded}-${randSuffix}`;
 
     // 9. Calculate Cryptographic Integrity Hash (ADR-003)
     const integrityHash = computeProtocolIntegrityHash({
@@ -196,6 +230,7 @@ export class ProtocolService {
       recorded_at: recordedAt,
       gps_lat: request.gps.lat,
       gps_lng: request.gps.lng,
+      gps_source: (request.gps as any).source || 'UNKNOWN',
       panel: request.panel,
       chainage: request.chainage,
       measurements,
@@ -207,9 +242,9 @@ export class ProtocolService {
     const insertProtocol = this.db.prepare(`
       INSERT INTO protocols (
         id, project_id, activity, recorded_at, server_received_at, timezone_offset,
-        gps_lat, gps_lng, panel, chainage, measurements, verdict,
+        gps_lat, gps_lng, gps_source, panel, chainage, measurements, verdict,
         technician_id, device_token, integrity_hash, pdf_key, subcontractor_id, notes, idempotency_key
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
     insertProtocol.run(
@@ -221,6 +256,7 @@ export class ProtocolService {
       timezoneOffset,
       request.gps.lat,
       request.gps.lng,
+      (request.gps as any).source || 'UNKNOWN',
       request.panel,
       request.chainage,
       JSON.stringify(measurements),
@@ -235,7 +271,7 @@ export class ProtocolService {
     );
 
     // 11. Concrete Normalized Relational Storage (Trucks & Cylinders)
-    const pending: string[] = [];
+    pending = [];
     const truckRecordMap = new Map<number, string>(); // truck_number -> truck_id
 
     if (request.activity === 'CONCRETE') {
@@ -399,7 +435,7 @@ export class ProtocolService {
     }
 
     // 13. Non-Conformance Handling on Failure (Requirement R2)
-    let primaryNonconformanceId: string | null = null;
+    primaryNonconformanceId = null;
     if (verdict === 'FAIL') {
       for (const failedCheck of valResult.failedChecks) {
         const ncId = `NC-${datePart}-${timePart}-${Math.floor(1000 + Math.random() * 9000)}`;
@@ -429,8 +465,9 @@ export class ProtocolService {
           `Criterio no cumplido en ${failedCheck.field}: obtenido ${failedCheck.actual}, requerido ${failedCheck.expected}`
         );
 
-        // Notify Quality Specialist within 60 seconds (R2)
-        await this.notificationService.notifyNonConformanceOpened({
+        // Notify Quality Specialist within 60 seconds (R2) — deferred until
+        // after COMMIT (never hold the DB transaction across network I/O).
+        pendingNcNotifications.push({
           projectId: request.project_id,
           protocolId,
           nonconformanceId: ncId,
@@ -442,6 +479,27 @@ export class ProtocolService {
           truckInfo: failedCheck.source_reference
         });
       }
+    } // end if (verdict === 'FAIL')
+
+    // R-1: commit the atomic unit (protocol + trucks + cylinders + checks +
+    // signatures + NCs). On ANY failure, roll back to avoid half-written records.
+    this.db.exec('COMMIT');
+    } catch (err: any) {
+      try { this.db.exec('ROLLBACK'); } catch { /* already rolled back */ }
+      // Idempotent retry race: a concurrent submit with the same key committed
+      // first while we waited on the lock. Return the winner instead of 500.
+      if (request.idempotency_key && /UNIQUE constraint failed/i.test(err.message || '')) {
+        const winner = this.db.prepare(
+          `SELECT * FROM protocols WHERE idempotency_key = ?`
+        ).get(request.idempotency_key) as any;
+        if (winner) return this.buildSubmissionResponse(winner);
+      }
+      throw err;
+    }
+
+    // Post-commit side effects (outside the transaction by design).
+    for (const n of pendingNcNotifications) {
+      await this.notificationService.notifyNonConformanceOpened(n);
     }
 
     // 14. Dispatch Protocol Creation Alert to Project Recipient
@@ -527,6 +585,23 @@ export class ProtocolService {
     const passed = result.strength_kgcm2 >= designFc;
     const testDate = new Date().toISOString().split('T')[0];
 
+    // H-02 (2026-10-03): the verdict state machine only allows transitions OUT
+    // of PROVISIONAL_PASS (enforced by trg_protocols_immutability). Writing
+    // PASS/FAIL onto a finalized protocol used to hit the trigger → 500 with
+    // the cylinder already updated. Reject early with a clear 409 instead, and
+    // run the whole break recording atomically.
+    if (result.age_days === 28 && protocol.verdict !== 'PROVISIONAL_PASS') {
+      throw new Error(
+        `VERDICT_FINALIZED: El protocolo ${protocolId} ya tiene veredicto ${protocol.verdict}; ` +
+        `la rotura de probetas no puede modificarlo.`
+      );
+    }
+
+    let newProtocolVerdict: ProtocolVerdict = protocol.verdict;
+    let nonconformanceId: string | null = null;
+
+    this.db.exec('BEGIN IMMEDIATE');
+    try {
     // Update cylinder record
     this.db.prepare(`
       UPDATE cylinders
@@ -540,9 +615,6 @@ export class ProtocolService {
       passed ? 'PASS' : 'FAIL',
       cylinder.id
     );
-
-    let newProtocolVerdict: ProtocolVerdict = protocol.verdict;
-    let nonconformanceId: string | null = null;
 
     // Evaluate 28-day break rules (the contractual compliance gate)
     if (result.age_days === 28) {
@@ -587,6 +659,13 @@ export class ProtocolService {
           `).run(protocolId);
         }
       }
+    }
+
+    // Commit the atomic unit (cylinder + verdict + NC) before any network I/O.
+    this.db.exec('COMMIT');
+    } catch (err: any) {
+      try { this.db.exec('ROLLBACK'); } catch { /* already rolled back */ }
+      throw err;
     }
 
     // Send WhatsApp notification for cylinder test result

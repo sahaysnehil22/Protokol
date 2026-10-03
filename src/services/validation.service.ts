@@ -206,25 +206,22 @@ export class ValidationService {
       case 'IN': {
         const allowed = Array.isArray(crit.allowed_values) ? crit.allowed_values : [];
         if (allowed.length === 0) return true;
+        // H-06 (2026-10-03): STRICT evaluation. The old code had hardcoded
+        // pass-bands (8.5–13.0, 3.25–5.25) that let values OUTSIDE allowed_values
+        // through. Now only direct matches pass; the legitimate cm/inch dual
+        // is handled by converting the actual value, not by a magic band.
         const cleanActual = String(actualValue).replace(/["'\s]/g, '');
-        // Check direct match
-        const directMatch = allowed.some(a => {
-          const cleanAllowed = String(a).replace(/["'\s]/g, '');
-          return cleanAllowed === cleanActual || parseFloat(cleanAllowed) === parseFloat(cleanActual);
-        });
-        if (directMatch) return true;
-
-        // If actualValue was submitted in cm or fractional inches
+        const candidates = [cleanActual];
         const numVal = parseFloat(cleanActual);
         if (!isNaN(numVal)) {
-          if (numVal >= 8.5 && numVal <= 13.0) {
-            return true; // within 8.9 - 12.7 cm reference band
-          }
-          if (numVal >= 3.25 && numVal <= 5.25) {
-            return true; // within 3.5" - 5" discrete range
-          }
+          candidates.push(String(numVal / 2.54), String(numVal * 2.54));
         }
-        return false;
+        return allowed.some(a => {
+          const cleanAllowed = String(a).replace(/["'\s]/g, '');
+          return candidates.some(c =>
+            c === cleanAllowed || parseFloat(c) === parseFloat(cleanAllowed)
+          );
+        });
       }
 
       case 'BETWEEN':

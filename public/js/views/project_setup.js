@@ -75,6 +75,20 @@ export function renderProjectSetupView(container, onProjectCreated, onCancel) {
           <input type="text" id="proj-section" class="form-input" placeholder="Tramo AY-728 a AY-729 (km 0+000 a 2+380)" />
         </div>
 
+        <!-- Centralized PROJECT PIN (two-tier auth, 2026-10-03): set once by the
+             company, shared with the crew. Employees cannot change it. -->
+        <div class="form-group" style="background: #FFFBEB; border: 1px solid #FCD34D; border-radius: 8px; padding: 12px;">
+          <label class="form-label">🔑 ${t('setup.project_pin_label')}</label>
+          <div style="position: relative;">
+            <input type="password" id="proj-access-pin" class="form-input" required minlength="4"
+              placeholder="••••••" autocomplete="new-password"
+              style="letter-spacing: 4px; font-size: 18px; padding-right: 44px;" />
+            <button type="button" id="proj-pin-toggle" aria-label="Mostrar / ocultar PIN"
+              style="position: absolute; right: 8px; top: 50%; transform: translateY(-50%); background: none; border: none; font-size: 18px; cursor: pointer; padding: 4px;">👁️</button>
+          </div>
+          <span class="form-label-hint">${t('setup.project_pin_hint')}</span>
+        </div>
+
         <!-- 2. Equipo de Ingenieros y Especialistas del Proyecto (F6 - Feeds PDF signature grid) -->
         <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 24px; margin-bottom: 12px; flex-wrap: wrap; gap: 8px;">
           <div>
@@ -104,6 +118,15 @@ export function renderProjectSetupView(container, onProjectCreated, onCancel) {
   `;
 
   const form = container.querySelector('#project-setup-form');
+  const projPinInput = container.querySelector('#proj-access-pin');
+  const projPinToggle = container.querySelector('#proj-pin-toggle');
+  if (projPinToggle && projPinInput) {
+    projPinToggle.addEventListener('click', () => {
+      const show = projPinInput.type === 'password';
+      projPinInput.type = show ? 'text' : 'password';
+      projPinToggle.textContent = show ? '🙈' : '👁️';
+    });
+  }
   const errorDiv = container.querySelector('#setup-error');
   const rosterContainer = container.querySelector('#tech-roster-container');
   const addTechBtn = container.querySelector('#btn-add-tech-row');
@@ -112,35 +135,35 @@ export function renderProjectSetupView(container, onProjectCreated, onCancel) {
       name: 'Ing. David Valdez Ochoa',
       role: 'Quality Specialist',
       cip: '',
-      pin: '1234',
+      pin: '',
       whatsapp: '+51966000001'
     },
     {
       name: 'Ing. Cristian Manuel Torres Salinas',
       role: 'Quality Specialist',
       cip: '260873',
-      pin: '1234',
+      pin: '',
       whatsapp: '+51966000009'
     },
     {
       name: 'Ing. Teodoro Manuel Huamancusi Quispe',
       role: 'Supervisor',
       cip: '53548',
-      pin: '1234',
+      pin: '',
       whatsapp: '+51966000006'
     },
     {
       name: 'Ing. Edison Cuadros Garcia',
       role: 'Site Resident',
       cip: '302775',
-      pin: '1234',
+      pin: '',
       whatsapp: '+51966000002'
     },
     {
       name: 'Ing. Roly Conocachi Huamani',
       role: 'Structures Specialist',
       cip: '76843',
-      pin: '1234',
+      pin: '',
       whatsapp: '+51966000007'
     }
   ];
@@ -185,8 +208,8 @@ export function renderProjectSetupView(container, onProjectCreated, onCancel) {
           </div>
 
           <div>
-            <label class="form-label" style="font-size: 11px; margin-bottom: 2px;">PIN de Campo (4 dígitos)</label>
-            <input type="password" maxlength="4" pattern="[0-9]*" inputmode="numeric" class="form-input eng-pin" placeholder="1234" value="${eng.pin}" required style="font-size: 14px; text-align: center; letter-spacing: 2px;" />
+            <label class="form-label" style="font-size: 11px; margin-bottom: 2px;">PIN personal de firma (4 dígitos)</label>
+            <input type="password" maxlength="4" pattern="[0-9]*" inputmode="numeric" class="form-input eng-pin" placeholder="••••" value="${eng.pin}" required style="font-size: 14px; text-align: center; letter-spacing: 2px;" />
           </div>
 
           <div>
@@ -220,7 +243,7 @@ export function renderProjectSetupView(container, onProjectCreated, onCancel) {
       name: '',
       role: 'Quality Specialist',
       cip: '',
-      pin: '1234',
+      pin: '',
       whatsapp: ''
     });
     renderEngineerCards();
@@ -319,8 +342,17 @@ export function renderProjectSetupView(container, onProjectCreated, onCancel) {
 
       const recipients = engineersList.map(e => e.whatsapp).filter(Boolean).join(', ') || '+51966000001';
 
+      const accessPin = (projPinInput ? projPinInput.value : '').trim();
+      if (accessPin.length < 4) {
+        errorDiv.innerText = 'El PIN centralizado del proyecto es obligatorio (mínimo 4 caracteres).';
+        errorDiv.style.display = 'block';
+        if (submitBtn) { submitBtn.disabled = false; }
+        return;
+      }
+
       const payload = {
         id,
+        access_pin: accessPin,
         name,
         contract_number,
         entity,

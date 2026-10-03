@@ -2,14 +2,16 @@ import crypto from 'crypto';
 import { config } from '../config.js';
 /**
  * Generates a salted SHA-256 hash for a technician PIN.
+ * Salt comes from config (PIN_SALT env); the literal fallback below only
+ * applies when config itself fell back (dev). Never hardcode a new default here.
  */
-export function hashPin(pin, salt = 'protokol_salt_2026') {
+export function hashPin(pin, salt = config.pinSalt) {
     return crypto.createHmac('sha256', salt).update(pin).digest('hex');
 }
 /**
  * Verifies a provided PIN against the stored hash.
  */
-export function verifyPin(pin, storedHash, salt = 'protokol_salt_2026') {
+export function verifyPin(pin, storedHash, salt = config.pinSalt) {
     const computed = hashPin(pin, salt);
     return crypto.timingSafeEqual(Buffer.from(computed), Buffer.from(storedHash));
 }
@@ -32,6 +34,7 @@ export function computeProtocolIntegrityHash(payload) {
         payload.recorded_at,
         payload.gps_lat.toFixed(6),
         payload.gps_lng.toFixed(6),
+        payload.gps_source || 'UNKNOWN',
         payload.panel,
         payload.chainage,
         JSON.stringify(sortedMeasurements),

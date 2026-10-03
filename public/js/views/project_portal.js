@@ -1,7 +1,10 @@
 // PROTOKOL — View: Project Portal (Landing Hub)
+// 2026-10-03: "my projects" dashboard (scope=mine), archive/restore with PIN.
 import { t } from '../i18n.js';
 
 export async function renderProjectPortalView(container, onSelectProject, onOpenProjectSetup) {
+  const deviceToken = localStorage.getItem('protokol_device_token') || 'dvc_pilot_qa_01';
+
   container.innerHTML = `
     <div style="margin-bottom: 24px;">
       <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
@@ -18,23 +21,39 @@ export async function renderProjectPortalView(container, onSelectProject, onOpen
         </button>
       </div>
 
-      <!-- Search Bar -->
-      <div style="margin-top: 18px;">
-        <input 
-          type="text" 
-          id="portal-search" 
-          class="form-input" 
+      <div style="margin-top: 18px; display: flex; gap: 10px;">
+        <input
+          type="text"
+          id="portal-search"
+          class="form-input"
           placeholder="${t('portal.search')}"
-          style="font-size: 13px; padding-left: 12px;"
+          style="font-size: 13px; padding-left: 12px; flex: 1;"
         />
+        <button id="btn-toggle-archived" class="btn btn-outline" style="font-size: 12px; white-space: nowrap;">
+          📦 ${t('portal.show_archived')}
+        </button>
       </div>
     </div>
 
-    <!-- Projects List Grid -->
     <div id="portal-projects-list" style="display: flex; flex-direction: column; gap: 14px;">
       <div style="text-align: center; padding: 40px; color: var(--color-text-muted);">
         <div style="font-size: 28px; animation: pulse 1s infinite;">⚙️</div>
         <p style="margin-top: 8px; font-size: 13px;">Cargando proyectos...</p>
+      </div>
+    </div>
+
+    <!-- Archive PIN modal -->
+    <div id="archive-modal" style="display: none; position: fixed; inset: 0; background: rgba(15,23,42,0.5); z-index: 100; align-items: center; justify-content: center; padding: 20px;">
+      <div class="card" style="max-width: 380px; width: 100%;">
+        <h3 id="archive-modal-title" style="font-size: 16px; font-weight: 800; margin-bottom: 6px;"></h3>
+        <p id="archive-modal-desc" style="font-size: 13px; color: var(--color-text-secondary); margin-bottom: 14px;"></p>
+        <input type="password" id="archive-pin" class="form-input" placeholder="PIN del proyecto"
+          style="text-align: center; letter-spacing: 6px; font-size: 20px;" />
+        <div id="archive-error" style="color: #F87171; font-size: 13px; margin-top: 8px; display: none;"></div>
+        <div style="display: flex; gap: 10px; margin-top: 16px;">
+          <button id="archive-cancel" class="btn btn-outline" style="flex: 1;">${t('common.cancel')}</button>
+          <button id="archive-confirm" class="btn btn-primary" style="flex: 1;"></button>
+        </div>
       </div>
     </div>
   `;
@@ -42,16 +61,34 @@ export async function renderProjectPortalView(container, onSelectProject, onOpen
   const projectsContainer = container.querySelector('#portal-projects-list');
   const searchInput = container.querySelector('#portal-search');
   const createBtn = container.querySelector('#btn-portal-create');
+  const toggleArchivedBtn = container.querySelector('#btn-toggle-archived');
+  const modal = container.querySelector('#archive-modal');
+  const modalTitle = container.querySelector('#archive-modal-title');
+  const modalDesc = container.querySelector('#archive-modal-desc');
+  const modalPin = container.querySelector('#archive-pin');
+  const modalError = container.querySelector('#archive-error');
+  const modalCancel = container.querySelector('#archive-cancel');
+  const modalConfirm = container.querySelector('#archive-confirm');
 
   createBtn.addEventListener('click', () => onOpenProjectSetup());
 
   let allProjects = [];
+  let showingArchived = false;
+  let pendingArchive = null; // { id, name, action: 'archive' | 'restore' }
 
   async function loadProjects() {
     try {
-      const res = await fetch('/api/projects');
+      const url = showingArchived
+        ? `/api/projects?archived=true`
+        : `/api/projects?scope=mine&device_token=${encodeURIComponent(deviceToken)}`;
+      let res = await fetch(url);
       if (!res.ok) throw new Error('Error al conectar con la base de datos de proyectos');
       allProjects = await res.json();
+      if (!showingArchived && allProjects.length === 0) {
+        // Fallback: show all (legacy projects without owner/membership)
+        res = await fetch('/api/projects');
+        allProjects = await res.json();
+      }
       renderProjects(allProjects);
     } catch (err) {
       projectsContainer.innerHTML = `
@@ -64,6 +101,59 @@ export async function renderProjectPortalView(container, onSelectProject, onOpen
       if (retryBtn) retryBtn.addEventListener('click', loadProjects);
     }
   }
+
+  function openArchiveModal(project, action) {
+    pendingArchive = { id: project.id, name: project.name, action };
+    modalTitle.innerText = action === 'archive'
+      ? `📦 ${t('portal.archive_title')}`
+      : `♻️ ${t('portal.restore_title')}`;
+    modalDesc.innerText = action === 'archive'
+      ? t('portal.archive_desc').replace('{name}', project.name)
+      : t('portal.restore_desc').replace('{name}', project.name);
+    modalConfirm.innerText = action === 'archive' ? t('portal.archive_confirm') : t('portal.restore_confirm');
+    modalPin.value = '';
+    modalError.style.display = 'none';
+    modal.style.display = 'flex';
+    setTimeout(() => modalPin.focus(), 50);
+  }
+
+  modalCancel.addEventListener('click', () => { modal.style.display = 'none'; pendingArchive = null; });
+  modal.addEventListener('click', (e) => { if (e.target === modal) { modal.style.display = 'none'; pendingArchive = null; } });
+
+  modalConfirm.addEventListener('click', async () => {
+    if (!pendingArchive) return;
+    const pin = modalPin.value.trim();
+    if (pin.length < 4) {
+      modalError.innerText = t('identify.err_pin');
+      modalError.style.display = 'block';
+      return;
+    }
+    modalConfirm.disabled = true;
+    try {
+      // Verify the project PIN (establishes the session cookie), then archive/restore.
+      const vRes = await fetch(`/api/projects/${pendingArchive.id}/verify-access`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pin, device_token: deviceToken })
+      });
+      if (!vRes.ok) {
+        const d = await vRes.json().catch(() => ({}));
+        throw new Error(d.message || 'PIN incorrecto.');
+      }
+      const aRes = await fetch(`/api/projects/${pendingArchive.id}/${pendingArchive.action}`, { method: 'PATCH' });
+      if (!aRes.ok) throw new Error('No se pudo completar la operación.');
+      // Log out the archive session (it was only for this action)
+      await fetch('/api/auth/logout', { method: 'POST' }).catch(() => {});
+      modal.style.display = 'none';
+      pendingArchive = null;
+      await loadProjects();
+    } catch (err) {
+      modalError.innerText = err.message;
+      modalError.style.display = 'block';
+    } finally {
+      modalConfirm.disabled = false;
+    }
+  });
 
   function renderProjects(projects) {
     if (projects.length === 0) {
@@ -82,44 +172,39 @@ export async function renderProjectPortalView(container, onSelectProject, onOpen
     }
 
     projectsContainer.innerHTML = projects.map(p => `
-      <div class="card project-card" data-id="${p.id}" style="cursor: pointer; transition: transform 0.15s ease, box-shadow 0.15s ease; border-left: 4px solid #0284C7; position: relative;">
+      <div class="card project-card" data-id="${p.id}" style="cursor: pointer; transition: transform 0.15s ease, box-shadow 0.15s ease; border-left: 4px solid ${showingArchived ? '#94A3B8' : '#0284C7'}; position: relative;">
         <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 10px;">
           <div style="flex: 1;">
             <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
               <span style="font-size: 11px; font-weight: 800; color: #0284C7; background: #E0F2FE; padding: 2px 8px; border-radius: 6px; letter-spacing: 0.5px;">
                 ${p.id}
               </span>
-              <span style="font-size: 11px; color: var(--color-text-muted); font-weight: 600;">
-                ${p.contract_number || 'Contrato sin número'}
-              </span>
+              ${showingArchived ? `<span style="font-size: 11px; font-weight: 700; color: #64748B; background: #F1F5F9; padding: 2px 8px; border-radius: 6px;">📦 ${t('portal.archived_badge')}</span>` : ''}
             </div>
-
             <h3 style="font-size: 16px; font-weight: 800; color: #0F172A; margin: 8px 0 4px 0; line-height: 1.3;">
               ${p.name}
             </h3>
-
             <div style="font-size: 12px; color: var(--color-text-secondary); margin-bottom: 8px;">
-              🏢 <strong>${p.entity}</strong> • 📍 ${p.location || 'Perú'}
+              🏢 <strong>${p.entity || ''}</strong> • 📍 ${p.location || 'Perú'}
             </div>
-
             ${p.road_section ? `
               <div style="font-size: 12px; color: var(--color-text-muted); margin-bottom: 10px;">
                 🛣️ Tramo: ${p.road_section}
               </div>
             ` : ''}
-
-            <!-- Badges info -->
-            <div style="display: flex; gap: 8px; flex-wrap: wrap; margin-top: 6px;">
-              <span style="font-size: 11px; background: #F1F5F9; color: #475569; padding: 2px 8px; border-radius: 4px; font-weight: 600;">
-                🧪 ${t('portal.sampling')}: ${p.cylinders_per_truck || 4} probetas/mixer
-              </span>
-              <span style="font-size: 11px; background: #F1F5F9; color: #475569; padding: 2px 8px; border-radius: 4px; font-weight: 600;">
-                💪 ${t('portal.default_fc')}: ${p.default_design_fc || 210} kg/cm²
-              </span>
-            </div>
           </div>
-
-          <div style="align-self: center;">
+          <div style="display: flex; flex-direction: column; gap: 8px; align-items: center;">
+            ${!showingArchived ? `
+            <button class="btn-archive" data-id="${p.id}" data-name="${p.name.replace(/"/g, '&quot;')}"
+              title="${t('portal.archive_title')}"
+              style="background: none; border: none; font-size: 16px; cursor: pointer; padding: 4px;" >
+              📦
+            </button>` : `
+            <button class="btn-restore" data-id="${p.id}" data-name="${p.name.replace(/"/g, '&quot;')}"
+              title="${t('portal.restore_title')}"
+              style="background: none; border: none; font-size: 16px; cursor: pointer; padding: 4px;">
+              ♻️
+            </button>`}
             <span style="display: inline-flex; align-items: center; justify-content: center; width: 36px; height: 36px; background: #F0F9FF; color: #0284C7; border-radius: 50%; font-size: 18px; font-weight: bold;">
               →
             </span>
@@ -137,20 +222,38 @@ export async function renderProjectPortalView(container, onSelectProject, onOpen
         card.style.transform = 'translateY(0)';
         card.style.boxShadow = '';
       });
-      card.addEventListener('click', () => {
-        const id = card.getAttribute('data-id');
-        onSelectProject(id);
+      card.addEventListener('click', (e) => {
+        if (e.target.closest('.btn-archive') || e.target.closest('.btn-restore')) return;
+        onSelectProject(card.getAttribute('data-id'));
+      });
+    });
+
+    projectsContainer.querySelectorAll('.btn-archive').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        openArchiveModal({ id: btn.dataset.id, name: btn.dataset.name }, 'archive');
+      });
+    });
+    projectsContainer.querySelectorAll('.btn-restore').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        openArchiveModal({ id: btn.dataset.id, name: btn.dataset.name }, 'restore');
       });
     });
   }
 
+  toggleArchivedBtn.addEventListener('click', () => {
+    showingArchived = !showingArchived;
+    toggleArchivedBtn.innerHTML = showingArchived
+      ? `📂 ${t('portal.show_active')}`
+      : `📦 ${t('portal.show_archived')}`;
+    loadProjects();
+  });
+
   searchInput.addEventListener('input', (e) => {
     const q = e.target.value.toLowerCase().trim();
-    if (!q) {
-      renderProjects(allProjects);
-      return;
-    }
-    const filtered = allProjects.filter(p => 
+    if (!q) { renderProjects(allProjects); return; }
+    const filtered = allProjects.filter(p =>
       (p.id && p.id.toLowerCase().includes(q)) ||
       (p.name && p.name.toLowerCase().includes(q)) ||
       (p.entity && p.entity.toLowerCase().includes(q)) ||

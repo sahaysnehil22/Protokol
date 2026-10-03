@@ -1,17 +1,20 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import request from 'supertest';
+import { authedAgent } from './helpers.js';
 import { DatabaseSync } from 'node:sqlite';
 import { createApp } from '../src/server.js';
 
 describe('David Valdez Ochoa Field Adjustments (Rulings F1–F12 / SPEC_FOR_SNEHIL.md)', () => {
   let db: DatabaseSync;
   let app: any;
+  let agent: any;
 
-  beforeEach(() => {
+  beforeEach(async () => {
     db = new DatabaseSync(':memory:');
     db.exec('PRAGMA foreign_keys = ON;');
     const instance = createApp(db);
     app = instance.app;
+    agent = await authedAgent(app);
   });
 
   afterEach(() => {
@@ -21,7 +24,7 @@ describe('David Valdez Ochoa Field Adjustments (Rulings F1–F12 / SPEC_FOR_SNEH
   // F1: Checklist Templates and Protocol Checks
   it('F1: loads paper checklist templates per activity and records protocol checks (CUMPLE / NO_CUMPLE / NO_APLICA)', async () => {
     // 1. Query checklist templates for CONCRETE
-    const tmplRes = await request(app)
+    const tmplRes = await agent
       .get('/api/projects/AY-728-001/checklist-templates?activity=CONCRETE');
     expect(tmplRes.status).toBe(200);
     expect(Array.isArray(tmplRes.body)).toBe(true);
@@ -32,7 +35,7 @@ describe('David Valdez Ochoa Field Adjustments (Rulings F1–F12 / SPEC_FOR_SNEH
     const firstTmpl = tmplRes.body[0];
 
     // 2. Submit protocol with checks
-    const protoRes = await request(app)
+    const protoRes = await agent
       .post('/api/protocols')
       .send({
         project_id: 'AY-728-001',
@@ -69,7 +72,7 @@ describe('David Valdez Ochoa Field Adjustments (Rulings F1–F12 / SPEC_FOR_SNEH
     const protocolId = protoRes.body.protocol_id;
 
     // 3. Query saved checks
-    const checksRes = await request(app)
+    const checksRes = await agent
       .get(`/api/protocols/${protocolId}/checks`);
     expect(checksRes.status).toBe(200);
     expect(checksRes.body.length).toBe(1);
@@ -81,7 +84,7 @@ describe('David Valdez Ochoa Field Adjustments (Rulings F1–F12 / SPEC_FOR_SNEH
   // F2: Discrete Slump Selector (3.5", 4", 4.5", 5")
   it('F2: evaluates discrete slump selector ("3.5", "4", "4.5", "5") with allowed_values operator IN', async () => {
     // Valid discrete slump: "4.5""
-    const validRes = await request(app)
+    const validRes = await agent
       .post('/api/protocols')
       .send({
         project_id: 'AY-728-001',
@@ -111,7 +114,7 @@ describe('David Valdez Ochoa Field Adjustments (Rulings F1–F12 / SPEC_FOR_SNEH
     expect(validRes.body.verdict).toBe('PROVISIONAL_PASS');
 
     // Invalid discrete slump: "6"" (out of allowed values)
-    const invalidRes = await request(app)
+    const invalidRes = await agent
       .post('/api/protocols')
       .send({
         project_id: 'AY-728-001',
@@ -144,7 +147,7 @@ describe('David Valdez Ochoa Field Adjustments (Rulings F1–F12 / SPEC_FOR_SNEH
 
   // F4, F6, F8, F9: 5-Box Official Signature Grid with PIN Traceability
   it('F4/F6/F8/F9: auto-creates 5-box signature grid and allows individual signing with PIN', async () => {
-    const protoRes = await request(app)
+    const protoRes = await agent
       .post('/api/protocols')
       .send({
         project_id: 'AY-728-001',
@@ -166,7 +169,7 @@ describe('David Valdez Ochoa Field Adjustments (Rulings F1–F12 / SPEC_FOR_SNEH
     const protocolId = protoRes.body.protocol_id;
 
     // 1. Fetch 5 signatures
-    const sigRes = await request(app)
+    const sigRes = await agent
       .get(`/api/protocols/${protocolId}/signatures`);
     expect(sigRes.status).toBe(200);
     expect(sigRes.body.length).toBe(5);
@@ -181,7 +184,7 @@ describe('David Valdez Ochoa Field Adjustments (Rulings F1–F12 / SPEC_FOR_SNEH
     expect(box3.status).toBe('PENDING');
 
     // 2. Supervisor signs with PIN
-    const signRes = await request(app)
+    const signRes = await agent
       .post(`/api/protocols/${protocolId}/sign`)
       .send({
         signatory_id: 'tech_supervisor',
@@ -194,7 +197,7 @@ describe('David Valdez Ochoa Field Adjustments (Rulings F1–F12 / SPEC_FOR_SNEH
     expect(signRes.body.stamp_key).toContain('stamp_');
 
     // 3. Re-query signatures
-    const updatedSigs = await request(app)
+    const updatedSigs = await agent
       .get(`/api/protocols/${protocolId}/signatures`);
     const updatedBox3 = updatedSigs.body.find((s: any) => s.sign_order === 3);
     expect(updatedBox3.status).toBe('SIGNED');
@@ -203,10 +206,11 @@ describe('David Valdez Ochoa Field Adjustments (Rulings F1–F12 / SPEC_FOR_SNEH
 
   // F5 & F6: Project Setup with Engineers Team & Standard 5-Activity Criteria
   it('F5 & F6: allows creating project with engineers team and custom criteria', async () => {
-    const projRes = await request(app)
+    const projRes = await agent
       .post('/api/projects')
       .send({
         id: 'PROJ-AYACUCHO-NEW',
+        access_pin: 'test-pin-1234',
         name: 'Pavimentación Urbana Carmen Alto',
         contract_number: 'N° 99-2026-GRA',
         entity: 'Gobierno Regional de Ayacucho',
@@ -231,19 +235,20 @@ describe('David Valdez Ochoa Field Adjustments (Rulings F1–F12 / SPEC_FOR_SNEH
           }
         ]
       });
+    const projAgent = await authedAgent(app, 'PROJ-AYACUCHO-NEW', 'test-pin-1234');
 
     expect(projRes.status).toBe(201);
     expect(projRes.body.id).toBe('PROJ-AYACUCHO-NEW');
 
     // Check that criteria were configured
-    const critRes = await request(app)
+    const critRes = await projAgent
       .get('/api/projects/PROJ-AYACUCHO-NEW/criteria');
     expect(critRes.status).toBe(200);
     expect(critRes.body.length).toBe(1);
     expect(critRes.body[0].activity).toBe('FORMWORK');
 
     // Check that technicians were saved
-    const techRes = await request(app)
+    const techRes = await projAgent
       .get('/api/projects/PROJ-AYACUCHO-NEW/technicians');
     expect(techRes.status).toBe(200);
     expect(techRes.body.length).toBe(1);
@@ -252,7 +257,7 @@ describe('David Valdez Ochoa Field Adjustments (Rulings F1–F12 / SPEC_FOR_SNEH
 
   // 5 Protocol Workflows: FORMWORK Activity
   it('handles FORMWORK protocol activity correctly in site sequence', async () => {
-    const formworkRes = await request(app)
+    const formworkRes = await agent
       .post('/api/protocols')
       .send({
         project_id: 'AY-728-001',
@@ -280,7 +285,7 @@ describe('David Valdez Ochoa Field Adjustments (Rulings F1–F12 / SPEC_FOR_SNEH
 
   // F12: Mixer load with supplier and delivery note (Guía de remisión)
   it('F12: stores mixer delivery note (guía de remisión) and supplier per truck', async () => {
-    const protoRes = await request(app)
+    const protoRes = await agent
       .post('/api/protocols')
       .send({
         project_id: 'AY-728-001',

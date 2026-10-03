@@ -141,6 +141,16 @@ export class PdfService {
       doc.font('Helvetica-Bold').text('Fecha:', 425, 78);
       doc.font('Helvetica').text(releaseDate, 465, 78);
 
+      // D-07 (2026-10-03): pilot watermark — visible on EVERY pdf until the
+      // legal framework (ADR-011 amendment + per-box signing + supersedes
+      // chain) is closed. Remove only by explicit product decision.
+      doc.save();
+      doc.rotate(-30, { origin: [297, 421] });
+      doc.font('Helvetica-Bold').fontSize(42).fillColor('#F59E0B').opacity(0.16)
+        .text('DOCUMENTO PILOTO — SIN VALIDEZ LEGAL', 60, 400, { width: 480, align: 'center' });
+      doc.restore();
+      doc.opacity(1).fillColor('#000000');
+
       // --- 2. GORE CONTRACT & WORK DETAILS BLOCK ---
       let y = 96;
       doc.rect(40, y, 515, 68).fillAndStroke('#FFFFFF', '#94A3B8');
@@ -175,8 +185,21 @@ export class PdfService {
       doc.font('Helvetica-Bold').fontSize(6.5).text('Correlativo N°:', 435, y + 55);
       doc.font('Helvetica-Bold').fillColor('#0284C7').text(params.protocol.id.substring(0, 16), 495, y + 55, { width: 55 });
 
+      // GPS + provenance badge (C-04/D-03): a pilot fallback MUST be visible,
+      // never silently presented as a real fix.
+      const gpsSrc = (params.protocol as any).gps_source;
+      const gpsLabel = `GPS: ${Number(params.protocol.gps_lat || 0).toFixed(6)}, ${Number(params.protocol.gps_lng || 0).toFixed(6)}`;
+      doc.font('Helvetica-Bold').fontSize(6.5).fillColor('#000000').text('GPS:', 45, y + 67);
+      if (!gpsSrc || gpsSrc === 'UNKNOWN' || gpsSrc === 'PILOT_DEFAULT') {
+        doc.font('Helvetica-Bold').fontSize(6.5).fillColor('#B45309')
+          .text(`${gpsLabel}   [VALOR PILOTO — SIN SEÑAL GPS]`, 85, y + 67, { width: 465 });
+        doc.fillColor('#000000');
+      } else {
+        doc.font('Helvetica').fontSize(6.5).fillColor('#000000').text(gpsLabel, 85, y + 67, { width: 465 });
+      }
+
       // --- 3. VERDICT BANNER ---
-      y += 74;
+      y += 86;
       let bannerColor = '#10B981';
       let verdictLabel = lang === 'en' ? 'CONFORMING / APPROVED (PASS)' : 'CONFORME / APROBADO (PASS)';
 
@@ -596,6 +619,11 @@ export class PdfService {
       doc.moveDown(8);
       doc.fillColor('#0F172A').fontSize(24).font('Helvetica-Bold').text('DOSIER DE CALIDAD', { align: 'center' });
       doc.fontSize(14).font('Helvetica').text('REGISTRO OFICIAL DE PROTOCOLOS Y ENSAYOS', { align: 'center' });
+      doc.moveDown(2);
+      // D-07: pilot watermark on the dossier cover as well.
+      doc.fillColor('#B45309').fontSize(13).font('Helvetica-Bold')
+        .text('DOCUMENTO PILOTO — SIN VALIDEZ LEGAL', { align: 'center' });
+      doc.fillColor('#0F172A');
       doc.moveDown(4);
 
       doc.fontSize(11).font('Helvetica-Bold').text('PROYECTO:', { align: 'center' });

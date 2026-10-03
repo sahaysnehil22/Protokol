@@ -1,5 +1,5 @@
 // PROTOKOL — Synchronization Engine (Offline-First Auto-Sync)
-import { getPendingSubmissions, removeSubmission, getLocalPhoto } from './db.js';
+import { getPendingSubmissions, removeSubmission, getLocalPhoto, updateSubmissionMeta } from './db.js';
 
 let isSyncing = false;
 let syncListeners = [];
@@ -92,7 +92,7 @@ export async function syncOfflineQueue() {
       const payload = {
         project_id: item.project_id,
         device_token: item.device_token,
-        technician_pin: item.technician_pin,
+        technician_id: item.technician_id,
         activity: item.activity,
         recorded_at: item.recorded_at,
         gps: item.gps,
@@ -116,7 +116,22 @@ export async function syncOfflineQueue() {
         console.log(`[SYNC] Protocolo sincronizado exitosamente: ${item.idempotency_key}`);
       } else {
         const errorJson = await res.json().catch(() => ({}));
-        console.warn(`[SYNC] Error del servidor al sincronizar ${item.idempotency_key}:`, errorJson);
+        // M-04 dead-letter: a 4xx means the payload itself is invalid and will
+        // NEVER succeed — park it as REJECTED instead of retrying forever.
+        // 5xx / network errors increment the retry counter; after 10 attempts
+        // the item is also parked as REJECTED for manual review.
+        const attempts = (item.retry_count || 0) + 1;
+        // 401/403 = session expired or wrong project: NOT the payload's fault,
+        // keep retrying (user must re-login). 400/404/409/422 = invalid payload.
+        const payloadFatal = [400, 404, 409, 422].includes(res.status);
+        const fatal = payloadFatal || attempts >= 10;
+        await updateSubmissionMeta(item.idempotency_key, {
+          retry_count: attempts,
+          status: fatal ? 'REJECTED' : 'PENDING_SYNC',
+          last_error: errorJson.error || errorJson.message || `HTTP ${res.status}`,
+          last_attempt_at: new Date().toISOString(),
+        });
+        console.warn(`[SYNC] Error del servidor al sincronizar ${item.idempotency_key}:`, errorJson, fatal ? '(REJECTED)' : `(retry ${attempts})`);
       }
     } catch (err) {
       console.error(`[SYNC] Error de red sincronizando ${item.idempotency_key}:`, err);
