@@ -8,14 +8,16 @@ RUN apt-get update && apt-get install -y --no-install-recommends python3 make g+
 WORKDIR /app
 
 COPY package.json package-lock.json ./
-RUN npm ci --omit=dev
+# Full install first: the TypeScript build needs dev tooling.
+# `npm prune` afterwards keeps the runtime image lean.
+RUN npm ci
 
 COPY tsconfig.json ./
 COPY src ./src
 COPY public ./public
 COPY index.js ./
 
-RUN npx tsc
+RUN npx tsc && npm prune --omit=dev
 
 # Run as non-root
 RUN useradd -m -u 10001 appuser \
