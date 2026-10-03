@@ -46,7 +46,15 @@ async function syncPhoto(clientPhotoId) {
 export async function syncOfflineQueue() {
   if (!navigator.onLine || isSyncing) return;
 
-  const pending = await getPendingSubmissions();
+  let pending;
+  try {
+    pending = await getPendingSubmissions();
+  } catch (e) {
+    // IndexedDB unavailable (denied storage, private mode, etc.): offline
+    // queue simply doesn't exist in this session — stay quiet, stay online.
+    console.warn('[SYNC] Cola offline no disponible:', e.message || e);
+    return;
+  }
   if (pending.length === 0) {
     notifySyncState({ isSyncing: false, pendingCount: 0 });
     return;

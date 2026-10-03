@@ -29,36 +29,79 @@ class App {
   async init() {
     console.log('[APP] Inicializando PROTOKOL PWA...');
 
-    // 1. Initialize local IndexedDB
-    await openLocalDB();
+    // 1. Initialize local IndexedDB (graceful degradation: field devices or
+    // hardened browsers may deny storage — the app must still boot online).
+    // A synchronous throw from indexedDB.open() becomes a rejection here.
+    try {
+      await openLocalDB();
+    } catch (e) {
+      console.error('[APP] IndexedDB no disponible, continuando en modo solo-en-línea:', e);
+      this.dbUnavailable = true;
+    }
 
     // 2. Initialize ServiceWorker
     if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('/sw.js').then((reg) => {
-        console.log('[SW] Service Worker registrado exitosamente con scope:', reg.scope);
-      }).catch((err) => {
-        console.warn('[SW] Fallo al registrar Service Worker:', err);
-      });
+      try {
+        navigator.serviceWorker.register('/sw.js').then((reg) => {
+          console.log('[SW] Service Worker registrado exitosamente con scope:', reg.scope);
+        }).catch((err) => {
+          console.warn('[SW] Fallo al registrar Service Worker:', err);
+        });
+      } catch (e) {
+        console.warn('[SW] Registro síncrono falló:', e);
+      }
     }
 
-    // 3. Initialize background auto-synchronization
-    initAutoSync();
+    // 3. Initialize background auto-synchronization (needs IndexedDB)
+    if (!this.dbUnavailable) {
+      try {
+        initAutoSync();
+      } catch (e) {
+        console.warn('[APP] initAutoSync falló:', e);
+      }
+    }
 
     // 4. Bind network status & queue drawer
-    this.bindNetworkStatus();
-
-    // 5. Bind Language Switcher & Brand Home Link
-    this.bindLanguageSwitcher();
-    this.bindBrandLink();
-
-    // 6. Check existing session
-    const savedSession = await getConfigItem('session');
-    if (savedSession) {
-      this.session = savedSession;
+    try {
+      this.bindNetworkStatus();
+    } catch (e) {
+      console.warn('[APP] bindNetworkStatus falló:', e);
     }
 
-    // Landing screen is the Project Portal
-    this.navigateTo('portal');
+    // 5. Bind Language Switcher & Brand Home Link
+    try {
+      this.bindLanguageSwitcher();
+      this.bindBrandLink();
+    } catch (e) {
+      console.warn('[APP] bindings fallaron:', e);
+    }
+
+    // 6. Check existing session (needs IndexedDB; skip when unavailable)
+    if (!this.dbUnavailable) {
+      try {
+        const savedSession = await getConfigItem('session');
+        if (savedSession) {
+          this.session = savedSession;
+        }
+      } catch (e) {
+        console.warn('[APP] No se pudo leer la sesión guardada:', e);
+      }
+    }
+
+    // Landing screen is the Project Portal — ALWAYS reached. A boot failure
+    // must never leave the user staring at the splash screen.
+    try {
+      this.navigateTo('portal');
+    } catch (e) {
+      console.error('[APP] Fallo crítico al renderizar el portal:', e);
+      this.mainContainer.innerHTML = `
+        <div class="card" style="text-align:center; padding: 32px 20px; margin-top: 24px;">
+          <div style="font-size: 40px; margin-bottom: 12px;">⚠️</div>
+          <p style="font-weight: 800; margin-bottom: 6px;">No se pudo iniciar PROTOKOL</p>
+          <p style="font-size: 13px; color: var(--color-text-secondary); margin-bottom: 16px;">${String(e.message || e)}</p>
+          <button class="btn btn-primary" onclick="location.reload()">Reintentar</button>
+        </div>`;
+    }
   }
 
   bindBrandLink() {
