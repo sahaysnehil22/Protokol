@@ -83,6 +83,21 @@
         var content = document.getElementById('app-content');
         if (content && content.textContent.indexOf('Iniciando PROTOKOL') !== -1) {
           showBootError('el módulo de la app no arrancó (revise consola del navegador)');
+          // Probe the module graph with the browser's own fetch stack to find
+          // which file fails (network vs CORS vs SW cache).
+          var files = ['/js/app.js', '/js/db.js', '/js/sync.js', '/js/i18n.js',
+            '/js/location.js', '/js/views/identify.js', '/js/views/project_portal.js'];
+          (async function () {
+            for (var i = 0; i < files.length; i++) {
+              try {
+                var r = await fetch(files[i], { cache: 'no-store' });
+                if (!r.ok) showBootError('probe ' + files[i] + ' -> HTTP ' + r.status);
+              } catch (e) {
+                showBootError('probe ' + files[i] + ' -> ' + (e && e.message ? e.message : e));
+              }
+            }
+            showBootError('probe terminado');
+          })();
         }
       }, 20000);
     })();
