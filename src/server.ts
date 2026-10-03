@@ -55,7 +55,7 @@ export function createApp(dbInstance?: any) {
   // Same-origin PWA traffic is unaffected; this blocks foreign sites from
   // calling the API with the user's cookies.
   const allowedOrigins = (process.env.CORS_ORIGINS ||
-    'https://protokol-c8eb.onrender.com,http://localhost:3000,http://127.0.0.1:3000')
+    'https://protokol-1.onrender.com,https://protokol-c8eb.onrender.com,http://localhost:3000,http://127.0.0.1:3000')
     .split(',').map(s => s.trim()).filter(Boolean);
   app.use(cors({
     origin: (origin, cb) => {
