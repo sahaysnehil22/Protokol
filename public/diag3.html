@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>Module diag 3</title></head>
+<body>
+<div id="out" style="font-family: monospace; white-space: pre-wrap; padding: 20px;">testing...</div>
+<script type="module">
+  const out = document.getElementById('out');
+  const log = (m) => { out.textContent += '\n' + m; };
+  try {
+    const params = new URLSearchParams(location.search);
+    if (!params.has('nosw')) {
+      log('controller: ' + (navigator.serviceWorker.controller ? 'ACTIVE' : 'none'));
+      const regs = await navigator.serviceWorker.getRegistrations();
+      log('registrations: ' + regs.length);
+      for (const r of regs) { await r.unregister(); log('unregistered: ' + r.scope); }
+      // Clear SW caches too
+      const keys = await caches.keys();
+      for (const k of keys) { await caches.delete(k); log('deleted cache: ' + k); }
+      log('reloading without SW...');
+      location.href = '/diag3.html?nosw=1';
+    } else {
+      log('SW-free page. attempting import...');
+      await import('/js/app.js');
+      log('MODULE LOADED OK WITHOUT SW');
+    }
+  } catch (e) {
+    log('FAILED: ' + (e && e.message ? e.message : String(e)));
+  }
+</script>
+</body>
+</html>
