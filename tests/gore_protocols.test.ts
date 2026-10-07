@@ -28,6 +28,10 @@ describe('GORE Ayacucho Official Inspection Protocols & PDF Verification (Annex 
     expect(formworkItems[0].section).toBe('1. DESCRIPCION DE ACTIVIDAD');
     expect(formworkItems[4].item_text).toContain('2.01 Dimensiones del encofrado');
     expect(formworkItems[4].section).toBe('2. VERIFICACIÓN DE LOS MATERIALES');
+    // Verbatim numbering: 2.01, 2.02, 2.04, 2.05 (2.03 is intentionally omitted on physical format)
+    expect(formworkItems[5].item_text).toContain('2.02');
+    expect(formworkItems[6].item_text).toContain('2.04');
+    expect(formworkItems[7].item_text).toContain('2.05');
 
     // 2. STEEL (03. PAVIMENTO_ACERO_MI.xlsx, FO01PT03)
     const steelItems = db.prepare(`
@@ -71,24 +75,59 @@ describe('GORE Ayacucho Official Inspection Protocols & PDF Verification (Annex 
     expect(compactionItems[4].item_text).toContain('3.1 Grado de compactación in-situ alcanza ≥100%');
   });
 
-  it('verifies official GORE document codes and revision numbers for all 5 activities', () => {
+  it('verifies official GORE document codes, revision numbers, and per-format answer states', () => {
+    // Formwork
     expect(GORE_DOC_SPECS.FORMWORK.code).toBe('GDC-PDE-2026');
     expect(GORE_DOC_SPECS.FORMWORK.title).toBe('PROTOCOLO DE ENCOFRADO');
+    expect(GORE_DOC_SPECS.FORMWORK.sigFamily).toBe('4_BOX_PAVEMENT');
+    expect(GORE_DOC_SPECS.FORMWORK.checklistStateLabels).toEqual({
+      pass: 'CUMPLE',
+      fail: 'NO CUMPLE',
+      na: 'NO APLICA'
+    });
 
+    // Steel
     expect(GORE_DOC_SPECS.STEEL.code).toBe('FO01PT03');
     expect(GORE_DOC_SPECS.STEEL.title).toBe('PROTOCOLO DE INSTALACION DE ACERO DE REFUERZO');
+    expect(GORE_DOC_SPECS.STEEL.sigFamily).toBe('4_BOX_PAVEMENT');
+    expect(GORE_DOC_SPECS.STEEL.checklistStateLabels).toEqual({
+      pass: 'CUMPLE',
+      fail: 'NO CUMPLE',
+      na: 'NO APLICA'
+    });
 
+    // Concrete
     expect(GORE_DOC_SPECS.CONCRETE.code).toBe('GDC-PCC-2026');
     expect(GORE_DOC_SPECS.CONCRETE.title).toBe('PROTOCOLO DE COLOCACIÓN DE PAVIMENTO RÍGIDO');
+    expect(GORE_DOC_SPECS.CONCRETE.defaultPartida).toContain('E=0.25M'); // Fixed from e=0.20m to e=0.25m
+    expect(GORE_DOC_SPECS.CONCRETE.sigFamily).toBe('4_BOX_PAVEMENT');
+    expect(GORE_DOC_SPECS.CONCRETE.checklistStateLabels).toEqual({
+      pass: 'Si',
+      fail: 'No',
+      na: 'N/A'
+    });
 
+    // Survey
     expect(GORE_DOC_SPECS.SURVEY.code).toBe('GCO-PVT-2026');
     expect(GORE_DOC_SPECS.SURVEY.title).toBe('PROTOCOLO DE VERIFICACIÓN TOPOGRÁFICA');
+    expect(GORE_DOC_SPECS.SURVEY.sigFamily).toBe('5_BOX_SURVEY');
+    expect(GORE_DOC_SPECS.SURVEY.checklistStateLabels).toEqual({
+      pass: 'C',
+      fail: 'NC',
+      na: 'NA'
+    });
 
+    // Probetas
+    expect(GORE_DOC_SPECS.CYLINDERS.code).toBe('SGC-CRP-2026');
+    expect(GORE_DOC_SPECS.CYLINDERS.title).toBe('CONTROL DE ROTURAS DE PROBETA');
+    expect(GORE_DOC_SPECS.CYLINDERS.sigFamily).toBe('4_BOX_LAB');
+
+    // Compaction flag
     expect(GORE_DOC_SPECS.COMPACTION.code).toBe('GDC-PCS-2026');
-    expect(GORE_DOC_SPECS.COMPACTION.title).toBe('PROTOCOLO DE CONTROL DE COMPACTACIÓN DE SUELOS');
+    expect(GORE_DOC_SPECS.COMPACTION.isConfirmed).toBe(false); // Flagged as unconfirmed
   });
 
-  it('successfully generates PDF protocols replicating official government format with 5-box signature grid and SHA-256 hash for all 5 activities', async () => {
+  it('successfully generates PDF protocols replicating official government format with separate digital annex for all activities', async () => {
     const activities: ActivityType[] = ['FORMWORK', 'STEEL', 'CONCRETE', 'SURVEY', 'COMPACTION'];
 
     for (const act of activities) {
@@ -136,7 +175,15 @@ describe('GORE Ayacucho Official Inspection Protocols & PDF Verification (Annex 
     }
   });
 
-  it('verifies that the official GORE signature roster contains all 5 required engineers and CIP numbers', () => {
+  it('generates the 10-column Probetas laboratory report (SGC-CRP-2026) as landscape PDF', async () => {
+    const probetasPath = await pdfService.generateProbetasPdf(PILOT_PROJECT_ID);
+    expect(fs.existsSync(probetasPath)).toBe(true);
+    const buffer = fs.readFileSync(probetasPath);
+    expect(buffer.subarray(0, 5).toString('ascii')).toBe('%PDF-');
+    expect(fs.statSync(probetasPath).size).toBeGreaterThan(1000);
+  });
+
+  it('verifies that the official GORE signature roster contains all required engineers and CIP numbers in database', () => {
     const technicians = db.prepare(`SELECT * FROM technicians WHERE project_id = ?`).all(PILOT_PROJECT_ID) as any[];
 
     const resident = technicians.find(t => t.name.includes('Edison Cuadros'));

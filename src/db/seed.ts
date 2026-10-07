@@ -284,8 +284,8 @@ export function seedDatabase(db: DatabaseSync): void {
     { id: 'chk_form_104', act: 'FORMWORK', sec: '1. DESCRIPCION DE ACTIVIDAD', text: '1.04 ¿Los puntales son los adecuados?', order: 4 },
     { id: 'chk_form_201', act: 'FORMWORK', sec: '2. VERIFICACIÓN DE LOS MATERIALES', text: '2.01 Dimensiones del encofrado según los planos y las EETT.', order: 5 },
     { id: 'chk_form_202', act: 'FORMWORK', sec: '2. VERIFICACIÓN DE LOS MATERIALES', text: '2.02 Distancias entre ejes y longitudes de encofrado.', order: 6 },
-    { id: 'chk_form_203', act: 'FORMWORK', sec: '2. VERIFICACIÓN DE LOS MATERIALES', text: '2.03 Verificación del alineamiento del encofrado.', order: 7 },
-    { id: 'chk_form_204', act: 'FORMWORK', sec: '2. VERIFICACIÓN DE LOS MATERIALES', text: '2.04 Verificación de la verticalidad o inclinación en los diferentes encofrados.', order: 8 },
+    { id: 'chk_form_204', act: 'FORMWORK', sec: '2. VERIFICACIÓN DE LOS MATERIALES', text: '2.04 Verificación del alineamiento del encofrado.', order: 7 },
+    { id: 'chk_form_205', act: 'FORMWORK', sec: '2. VERIFICACIÓN DE LOS MATERIALES', text: '2.05 Verificación de la verticalidad o inclinación en los diferentes encofrados', order: 8 },
 
     // STEEL (FO01PT03 / GDC-PLA-2026, Rev. 001) - Verbatim from 03. PAVIMENTO_ACERO_MI.xlsx
     { id: 'chk_steel_101', act: 'STEEL', sec: '1. MATERIAL', text: '1.01 Calidad del acero / Fluencia corresponde con las EETT del proyecto', order: 1 },

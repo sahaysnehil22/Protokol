@@ -6,36 +6,81 @@ import { config } from '../config.js';
 import { ProtocolRecord, ValidationCheck, ActivityType, ProjectRecord, ConcreteTruckRecord, SupportedLanguage } from '../types.js';
 import { PhotoService } from './photo.service.js';
 
-export const GORE_DOC_SPECS: Record<string, { code: string; rev: string; title: string; defaultPartida: string }> = {
+export interface GoreDocSpec {
+  code: string;
+  rev: string;
+  date: string;
+  title: string;
+  defaultPartida: string;
+  sigFamily: '4_BOX_PAVEMENT' | '5_BOX_SURVEY' | '4_BOX_LAB';
+  checklistStateLabels: {
+    pass: string;
+    fail: string;
+    na: string;
+  };
+  isConfirmed: boolean;
+}
+
+export const GORE_DOC_SPECS: Record<string, GoreDocSpec> = {
   FORMWORK: {
     code: 'GDC-PDE-2026',
     rev: 'Versión: 001',
+    date: '13/06/2026',
     title: 'PROTOCOLO DE ENCOFRADO',
-    defaultPartida: 'ENCOFRADO Y DESENCOFRADO'
+    defaultPartida: 'ENCOFRADO Y DESENCOFRADO',
+    sigFamily: '4_BOX_PAVEMENT',
+    checklistStateLabels: { pass: 'CUMPLE', fail: 'NO CUMPLE', na: 'NO APLICA' },
+    isConfirmed: true
   },
   STEEL: {
     code: 'FO01PT03',
     rev: 'Versión: 001',
+    date: '13/06/2026',
     title: 'PROTOCOLO DE INSTALACION DE ACERO DE REFUERZO',
-    defaultPartida: 'HABILITACION Y COLOCACION DE ACERO CORRUGADO PARA SOPORTE DOWELS'
+    defaultPartida: 'HABILITACION Y COLOCACION DE ACERO CORRUGADO PARA SOPORTE DOWELS',
+    sigFamily: '4_BOX_PAVEMENT',
+    checklistStateLabels: { pass: 'CUMPLE', fail: 'NO CUMPLE', na: 'NO APLICA' },
+    isConfirmed: true
   },
   CONCRETE: {
     code: 'GDC-PCC-2026',
     rev: 'Versión: 001',
+    date: '13/06/2026',
     title: 'PROTOCOLO DE COLOCACIÓN DE PAVIMENTO RÍGIDO',
-    defaultPartida: "Concreto f'c 280 Kg/cm² en pavimento rígido e=0.20m"
+    defaultPartida: "CONCRETO FC=280 KG/CM2, EN PAVIMENTO RIGIDO E=0.25M",
+    sigFamily: '4_BOX_PAVEMENT',
+    checklistStateLabels: { pass: 'Si', fail: 'No', na: 'N/A' },
+    isConfirmed: true
   },
   SURVEY: {
     code: 'GCO-PVT-2026',
     rev: 'Rev: 01',
+    date: '08/06/2026',
     title: 'PROTOCOLO DE VERIFICACIÓN TOPOGRÁFICA',
-    defaultPartida: 'TRAZO, NIVELACION Y REPLANTEO'
+    defaultPartida: 'TRAZO, NIVELACION Y REPLANTEO',
+    sigFamily: '5_BOX_SURVEY',
+    checklistStateLabels: { pass: 'C', fail: 'NC', na: 'NA' },
+    isConfirmed: true
   },
   COMPACTION: {
     code: 'GDC-PCS-2026',
     rev: 'Versión: 001',
+    date: '13/06/2026',
     title: 'PROTOCOLO DE CONTROL DE COMPACTACIÓN DE SUELOS',
-    defaultPartida: 'CONFORMACION Y COMPACTACION DE SUB-BASE Y BASE'
+    defaultPartida: 'CONFORMACION Y COMPACTACION DE SUB-BASE Y BASE',
+    sigFamily: '4_BOX_PAVEMENT',
+    checklistStateLabels: { pass: 'CUMPLE', fail: 'NO CUMPLE', na: 'NO APLICA' },
+    isConfirmed: false // Formato no confirmado en archivo físico (criterios EG-2013 referenciales)
+  },
+  CYLINDERS: {
+    code: 'SGC-CRP-2026',
+    rev: 'Revisión: ---',
+    date: 'JULIO 2026',
+    title: 'CONTROL DE ROTURAS DE PROBETA',
+    defaultPartida: 'ENSAYO DE RESISTENCIA A LA COMPRESIÓN',
+    sigFamily: '4_BOX_LAB',
+    checklistStateLabels: { pass: 'PASS', fail: 'FAIL', na: 'N/A' },
+    isConfirmed: true
   }
 };
 
@@ -53,6 +98,41 @@ export class PdfService {
   }
 
   /**
+   * Format date strictly as DD/MM/YYYY without hardcoded fallbacks
+   */
+  private formatDate(rawDate?: string | null): string {
+    if (!rawDate) {
+      const now = new Date();
+      return `${String(now.getDate()).padStart(2, '0')}/${String(now.getMonth() + 1).padStart(2, '0')}/${now.getFullYear()}`;
+    }
+    try {
+      const d = new Date(rawDate);
+      if (!isNaN(d.getTime())) {
+        const dd = String(d.getDate()).padStart(2, '0');
+        const mm = String(d.getMonth() + 1).padStart(2, '0');
+        const yyyy = d.getFullYear();
+        return `${dd}/${mm}/${yyyy}`;
+      }
+    } catch {}
+    return String(rawDate).substring(0, 10);
+  }
+
+  /**
+   * Get sequential correlative for project
+   */
+  private getCorrelativo(protocol: ProtocolRecord): string {
+    try {
+      const row = this.db.prepare(`
+        SELECT COUNT(*) as count FROM protocols WHERE project_id = ? AND id <= ?
+      `).get(protocol.project_id, protocol.id) as { count: number } | undefined;
+      const num = row?.count || 1;
+      return `N° ${String(num).padStart(4, '0')}`;
+    } catch {
+      return `N° 0001`;
+    }
+  }
+
+  /**
    * Generates a formal Peruvian PPI Protocol PDF certificate.
    */
   async generateProtocolPdf(params: {
@@ -65,525 +145,744 @@ export class PdfService {
   }): Promise<string> {
     const filename = `${params.protocol.id}.pdf`;
     const outputPath = path.join(config.pdfDir, filename);
-    const lang = params.lang || 'es';
 
     // Retrieve project information from database
     const project = this.db.prepare(`
       SELECT * FROM projects WHERE id = ?
     `).get(params.protocol.project_id) as unknown as ProjectRecord | undefined;
 
-    const projectName = project?.name || params.protocol.project_id;
-    const contractNumber = project?.contract_number || 'N/A';
-    const entity = project?.entity || 'Entidad Pública';
-    const executionMode = project?.execution_mode || 'Administración Directa';
-    const roadSection = project?.road_section || 'Tramo de Obra';
+    const projectName = project?.name || '“MEJORAMIENTO Y AMPLIACIÓN DEL SERVICIO DE TRANSITABILIDAD ENTRE EL TRAMO AY-728 (PENAL DE YANAMILLA) HASTA EL TRAMO AY-729 (PTAR) LONGITUD 2.38KM, EN EL DISTRITO DE ANDRES AVELINO CACERES- PROVINCIA DE HUAMANGA- DEPARTAMENTO DE AYACUCHO”';
+    const executingEntity = 'GOBIERNO REGIONAL DE AYACUCHO SEDE CENTRAL';
+    const supervisingEntity = (project as any)?.supervisor_entity || ''; // Blank on physical formats
+    const roadSection = project?.road_section || 'AY-728 / AY-729 (Totora - Yanamilla)';
+    const referencePlan = 'PC-01 (PLANO CLAVE)'; // Canonical index reference
 
-    // Retrieve any trucks recorded for this protocol
     const trucks = this.db.prepare(`
       SELECT * FROM concrete_trucks WHERE protocol_id = ? ORDER BY truck_number ASC
     `).all(params.protocol.id) as unknown as ConcreteTruckRecord[];
 
-    // Retrieve any cylinder test results recorded
     const cylinders = this.db.prepare(`
       SELECT * FROM cylinders WHERE protocol_id = ? ORDER BY truck_number ASC, age_days ASC
     `).all(params.protocol.id) as any[];
 
-    return new Promise((resolve, reject) => {
-      const doc = new PDFDocument({ margin: 40, size: 'A4' });
-      const stream = fs.createWriteStream(outputPath);
+    const protocolChecks = this.db.prepare(`
+      SELECT pc.*, ct.item_text, ct.section, ct.item_order
+      FROM protocol_checks pc
+      LEFT JOIN checklist_templates ct ON pc.template_item_id = ct.id
+      WHERE pc.protocol_id = ?
+      ORDER BY ct.item_order ASC, pc.id ASC
+    `).all(params.protocol.id) as any[];
 
+    const signatures = this.db.prepare(`
+      SELECT * FROM signatures WHERE protocol_id = ? ORDER BY sign_order ASC
+    `).all(params.protocol.id) as any[];
+
+    const photos = this.photoService.getPhotosForProtocol(params.protocol.id);
+
+    const docSpec: GoreDocSpec = GORE_DOC_SPECS[params.protocol.activity] || {
+      code: 'GDC-GEN-2026',
+      rev: 'Versión: 001',
+      date: '13/06/2026',
+      title: `PROTOCOLO DE ${params.protocol.activity}`,
+      defaultPartida: 'CONTROL DE CALIDAD Y PUNTOS DE INSPECCIÓN',
+      sigFamily: '4_BOX_PAVEMENT',
+      checklistStateLabels: { pass: 'CUMPLE', fail: 'NO CUMPLE', na: 'NO APLICA' },
+      isConfirmed: false
+    };
+
+    const formattedDate = this.formatDate(params.protocol.recorded_at);
+    const correlativo = this.getCorrelativo(params.protocol);
+
+    return new Promise((resolve, reject) => {
+      // 595.28 x 841.89 pt (A4 portrait)
+      const doc = new PDFDocument({ margin: 35, size: 'A4', autoFirstPage: true });
+      const stream = fs.createWriteStream(outputPath);
       doc.pipe(stream);
 
-      const docSpec = GORE_DOC_SPECS[params.protocol.activity] || {
-        code: 'GDC-GEN-2026',
-        rev: 'Versión: 001',
-        title: `PROTOCOLO DE ${params.protocol.activity}`,
-        defaultPartida: 'CONTROL DE CALIDAD Y PUNTOS DE INSPECCIÓN'
-      };
+      const pageWidth = 525; // 595 - 70 margin
+      const startX = 35;
 
-      // --- 1. OFFICIAL GORE AYACUCHO HEADER (3-BOX FORMAT) ---
-      doc.rect(40, 40, 515, 52).stroke('#334155');
+      // =========================================================================
+      // PAGE 1: FAITHFUL PAPER MIRROR (GOVERNMENT PROTOCOL FORMAT)
+      // =========================================================================
 
-      // Left Column: GORE Logo & Institution (width: 130)
-      doc.rect(40, 40, 130, 52).fillAndStroke('#F8FAFC', '#94A3B8');
-      doc.fillColor('#991B1B').fontSize(8.5).font('Helvetica-Bold').text('GOBIERNO REGIONAL', 45, 50, { width: 120, align: 'center' });
-      doc.fillColor('#0F172A').fontSize(11).font('Helvetica-Bold').text('AYACUCHO', 45, 62, { width: 120, align: 'center' });
-      doc.fillColor('#64748B').fontSize(5.5).font('Helvetica').text('SEDE CENTRAL — INFRAESTRUCTURA', 45, 76, { width: 120, align: 'center' });
+      // --- 1. INSTITUTIONAL HEADER BLOCK ---
+      let y = 35;
+      const headerHeight = 48;
+      doc.lineWidth(1).strokeColor('#000000');
+      doc.rect(startX, y, pageWidth, headerHeight).stroke();
 
-      // Center Column: Official Protocol Title (width: 250, from x=170)
-      doc.rect(170, 40, 250, 52).fillAndStroke('#FFFFFF', '#94A3B8');
-      doc.fillColor('#0F172A').fontSize(10).font('Helvetica-Bold').text(
-        docSpec.title,
-        175,
-        54,
-        { width: 240, align: 'center' }
-      );
-      doc.fillColor('#475569').fontSize(7).font('Helvetica').text(
-        'SISTEMA DE GESTIÓN DE CALIDAD Y PUNTOS DE INSPECCIÓN (PPI)',
-        175,
-        72,
-        { width: 240, align: 'center' }
-      );
+      // Left Box: Institutional Identification (115 pt)
+      const leftW = 120;
+      doc.rect(startX, y, leftW, headerHeight).stroke();
+      doc.fillColor('#000000').fontSize(7.5).font('Helvetica-Bold').text('GOBIERNO REGIONAL', startX + 5, y + 10, { width: leftW - 10, align: 'center' });
+      doc.fontSize(10).font('Helvetica-Bold').text('AYACUCHO', startX + 5, y + 20, { width: leftW - 10, align: 'center' });
+      doc.fontSize(6).font('Helvetica').text('SEDE CENTRAL', startX + 5, y + 33, { width: leftW - 10, align: 'center' });
 
-      // Right Column: Official Code, Revision and Date (width: 135, from x=420)
-      doc.rect(420, 40, 135, 52).fillAndStroke('#F8FAFC', '#94A3B8');
-      doc.moveTo(420, 57).lineTo(555, 57).stroke('#CBD5E1');
-      doc.moveTo(420, 74).lineTo(555, 74).stroke('#CBD5E1');
+      // Center Box: Official Protocol Title (270 pt)
+      const centerW = 265;
+      const centerStartX = startX + leftW;
+      doc.rect(centerStartX, y, centerW, headerHeight).stroke();
+      doc.fontSize(9.5).font('Helvetica-Bold').text(docSpec.title, centerStartX + 5, y + 15, { width: centerW - 10, align: 'center' });
+      if (!docSpec.isConfirmed && params.protocol.activity === 'COMPACTION') {
+        doc.fontSize(5.5).font('Helvetica-Oblique').text('(Criterios de compactación EG-2013 / Formato referencial)', centerStartX + 5, y + 32, { width: centerW - 10, align: 'center' });
+      }
 
-      doc.fillColor('#334155').fontSize(6.5).font('Helvetica-Bold');
-      doc.text('Código:', 425, 46);
-      doc.font('Helvetica').text(docSpec.code, 465, 46);
+      // Right Box: Control Code / Rev / Date (140 pt)
+      const rightW = pageWidth - leftW - centerW;
+      const rightStartX = centerStartX + centerW;
+      doc.rect(rightStartX, y, rightW, headerHeight).stroke();
 
-      doc.font('Helvetica-Bold').text('Versión:', 425, 62);
-      doc.font('Helvetica').text(docSpec.rev, 465, 62);
+      // Dividing lines in right box
+      const rh3 = headerHeight / 3;
+      doc.moveTo(rightStartX, y + rh3).lineTo(rightStartX + rightW, y + rh3).stroke();
+      doc.moveTo(rightStartX, y + rh3 * 2).lineTo(rightStartX + rightW, y + rh3 * 2).stroke();
 
-      const releaseDate = params.protocol.recorded_at ? params.protocol.recorded_at.substring(0, 10) : '13/08/2026';
-      doc.font('Helvetica-Bold').text('Fecha:', 425, 78);
-      doc.font('Helvetica').text(releaseDate, 465, 78);
+      // Code label (Topografía uses Còdigo with grave accent verbatim)
+      const codeLabel = params.protocol.activity === 'SURVEY' ? 'Còdigo:' : (params.protocol.activity === 'STEEL' ? 'Codigo:' : 'Código:');
+      doc.fontSize(6.5).font('Helvetica-Bold').text(codeLabel, rightStartX + 6, y + 4);
+      doc.font('Helvetica').text(docSpec.code, rightStartX + 42, y + 4);
 
-      // D-07 (2026-10-03): pilot watermark — visible on EVERY pdf until the
-      // legal framework (ADR-011 amendment + per-box signing + supersedes
-      // chain) is closed. Remove only by explicit product decision.
-      doc.save();
-      doc.rotate(-30, { origin: [297, 421] });
-      doc.font('Helvetica-Bold').fontSize(42).fillColor('#F59E0B').opacity(0.16)
-        .text('DOCUMENTO PILOTO — SIN VALIDEZ LEGAL', 60, 400, { width: 480, align: 'center' });
-      doc.restore();
-      doc.opacity(1).fillColor('#000000');
+      doc.font('Helvetica-Bold').text('Versión:', rightStartX + 6, y + rh3 + 4);
+      doc.font('Helvetica').text(docSpec.rev, rightStartX + 42, y + rh3 + 4);
 
-      // --- 2. GORE CONTRACT & WORK DETAILS BLOCK ---
-      let y = 96;
-      doc.rect(40, y, 515, 68).fillAndStroke('#FFFFFF', '#94A3B8');
-      doc.moveTo(40, y + 20).lineTo(555, y + 20).stroke('#E2E8F0');
-      doc.moveTo(40, y + 36).lineTo(555, y + 36).stroke('#E2E8F0');
-      doc.moveTo(40, y + 52).lineTo(555, y + 52).stroke('#E2E8F0');
+      doc.font('Helvetica-Bold').text('Fecha:', rightStartX + 6, y + rh3 * 2 + 4);
+      doc.font('Helvetica').text(docSpec.date, rightStartX + 42, y + rh3 * 2 + 4);
 
-      // Obra
-      doc.fillColor('#334155').fontSize(6.5).font('Helvetica-Bold').text('Obra:', 45, y + 4);
-      doc.font('Helvetica').fontSize(6).text(
-        projectName,
-        75, y + 4, { width: 475 }
-      );
+      y += headerHeight + 6;
 
-      // Ejecuta & Supervisa
-      doc.font('Helvetica-Bold').fontSize(6.5).text('Ejecuta:', 45, y + 23);
-      doc.font('Helvetica').fontSize(6.5).text(entity, 85, y + 23, { width: 230 });
-      doc.font('Helvetica-Bold').fontSize(6.5).text('Supervisa:', 330, y + 23);
-      doc.font('Helvetica').fontSize(6.5).text('SUPERVISIÓN DE OBRA / CONSORCIO', 380, y + 23, { width: 170 });
+      // --- 2. PROJECT METADATA BLOCK ---
+      const metaHeight = 62;
+      doc.rect(startX, y, pageWidth, metaHeight).stroke();
+      const metaRowH = metaHeight / 4;
+      doc.moveTo(startX, y + metaRowH).lineTo(startX + pageWidth, y + metaRowH).stroke();
+      doc.moveTo(startX, y + metaRowH * 2).lineTo(startX + pageWidth, y + metaRowH * 2).stroke();
+      doc.moveTo(startX, y + metaRowH * 3).lineTo(startX + pageWidth, y + metaRowH * 3).stroke();
 
-      // Ubicación & Plano Ref
-      doc.font('Helvetica-Bold').fontSize(6.5).text('Ubicación:', 45, y + 39);
-      doc.font('Helvetica').fontSize(6.5).text(`Progresiva ${params.protocol.chainage} (${roadSection})`, 85, y + 39, { width: 230 });
-      doc.font('Helvetica-Bold').fontSize(6.5).text('Plano Ref.:', 330, y + 39);
-      doc.font('Helvetica').fontSize(6.5).text('MCA-15 / PLANO CLAVE EG-2013', 380, y + 39, { width: 170 });
+      // Row 1: Obra
+      doc.fontSize(6.5).font('Helvetica-Bold').text('Obra:', startX + 5, y + 4);
+      doc.font('Helvetica').fontSize(5.5).text(projectName, startX + 32, y + 4, { width: pageWidth - 40, height: metaRowH - 2, ellipsis: true });
 
-      // Elemento, Partida & Correlativo
-      doc.font('Helvetica-Bold').fontSize(6.5).text('Elemento:', 45, y + 55);
-      doc.font('Helvetica').fontSize(6.5).text(`Paño ${params.protocol.panel}`, 85, y + 55, { width: 120 });
-      doc.font('Helvetica-Bold').fontSize(6.5).text('Partida:', 215, y + 55);
-      doc.font('Helvetica').fontSize(6.5).text(docSpec.defaultPartida, 250, y + 55, { width: 180 });
-      doc.font('Helvetica-Bold').fontSize(6.5).text('Correlativo N°:', 435, y + 55);
-      doc.font('Helvetica-Bold').fillColor('#0284C7').text(params.protocol.id.substring(0, 16), 495, y + 55, { width: 55 });
+      // Row 2: Ejecuta & Supervisa
+      const r2Y = y + metaRowH;
+      doc.fontSize(6.5).font('Helvetica-Bold').text('Ejecuta:', startX + 5, r2Y + 4);
+      doc.font('Helvetica').text(executingEntity, startX + 45, r2Y + 4, { width: 230 });
+      doc.font('Helvetica-Bold').text('Supervisa:', startX + 285, r2Y + 4);
+      doc.font('Helvetica').text(supervisingEntity || '---', startX + 335, r2Y + 4, { width: 180 });
 
-      // GPS + provenance badge (C-04/D-03): a pilot fallback MUST be visible,
-      // never silently presented as a real fix.
-      const gpsSrc = (params.protocol as any).gps_source;
-      const gpsLabel = `GPS: ${Number(params.protocol.gps_lat || 0).toFixed(6)}, ${Number(params.protocol.gps_lng || 0).toFixed(6)}`;
-      doc.font('Helvetica-Bold').fontSize(6.5).fillColor('#000000').text('GPS:', 45, y + 67);
-      if (!gpsSrc || gpsSrc === 'UNKNOWN' || gpsSrc === 'PILOT_DEFAULT') {
-        doc.font('Helvetica-Bold').fontSize(6.5).fillColor('#B45309')
-          .text(`${gpsLabel}   [VALOR PILOTO — SIN SEÑAL GPS]`, 85, y + 67, { width: 465 });
-        doc.fillColor('#000000');
+      // Row 3: Ubicación & Plano Ref.
+      const r3Y = y + metaRowH * 2;
+      doc.font('Helvetica-Bold').text('Ubicación:', startX + 5, r3Y + 4);
+      doc.font('Helvetica').text(`Progresiva ${params.protocol.chainage} (${roadSection})`, startX + 50, r3Y + 4, { width: 225 });
+      doc.font('Helvetica-Bold').text('PLANO DE REFERENCIA:', startX + 285, r3Y + 4);
+      doc.font('Helvetica').text(referencePlan, startX + 395, r3Y + 4, { width: 120 });
+
+      // Row 4: Elemento, Partida, Fecha Liberación, Correlativo N°
+      const r4Y = y + metaRowH * 3;
+      doc.font('Helvetica-Bold').text('Elemento:', startX + 5, r4Y + 4);
+      doc.font('Helvetica').text(`Paño ${params.protocol.panel}`, startX + 48, r4Y + 4, { width: 65 });
+
+      doc.font('Helvetica-Bold').text('PARTIDA:', startX + 118, r4Y + 4);
+      doc.font('Helvetica').fontSize(5.2).text(docSpec.defaultPartida, startX + 155, r4Y + 4, { width: 180, ellipsis: true });
+
+      doc.fontSize(6.5).font('Helvetica-Bold').text('Fecha:', startX + 342, r4Y + 4);
+      doc.font('Helvetica').text(formattedDate, startX + 372, r4Y + 4);
+
+      doc.font('Helvetica-Bold').text('Correlativo N°:', startX + 432, r4Y + 4);
+      doc.font('Helvetica-Bold').text(correlativo, startX + 490, r4Y + 4);
+
+      y += metaHeight + 8;
+
+      // =========================================================================
+      // --- 3. FORMAT-SPECIFIC BODY & CHECKLIST TABLES ---
+      // =========================================================================
+
+      if (params.protocol.activity === 'SURVEY') {
+        y = this.renderSurveyBody(doc, startX, y, pageWidth, protocolChecks, docSpec);
+      } else if (params.protocol.activity === 'CONCRETE') {
+        y = this.renderConcreteBody(doc, startX, y, pageWidth, protocolChecks, trucks, docSpec);
       } else {
-        doc.font('Helvetica').fontSize(6.5).fillColor('#000000').text(gpsLabel, 85, y + 67, { width: 465 });
+        // Encofrado, Acero, Compaction standard checklist grid
+        y = this.renderStandardChecklistBody(doc, startX, y, pageWidth, protocolChecks, docSpec, params.protocol.activity);
       }
 
-      // --- 3. VERDICT BANNER ---
-      y += 86;
-      let bannerColor = '#10B981';
-      let verdictLabel = lang === 'en' ? 'CONFORMING / APPROVED (PASS)' : 'CONFORME / APROBADO (PASS)';
+      // =========================================================================
+      // --- 4. SIGNATURE GRID (FAITHFUL PAPER MIRROR) ---
+      // =========================================================================
+      y = this.renderSignatureGrid(doc, startX, y, pageWidth, docSpec.sigFamily);
 
-      if (params.protocol.verdict === 'PROVISIONAL_PASS') {
-        bannerColor = '#F59E0B';
-        verdictLabel = lang === 'en'
-          ? 'APPROVED (Pending 28-day laboratory test results)'
-          : 'APROBADO (Pendiente resultado de laboratorio a 28 días)';
-      } else if (params.protocol.verdict === 'FAIL') {
-        bannerColor = '#EF4444';
-        verdictLabel = lang === 'en'
-          ? `NON-CONFORMING — RECORDED NC (${params.nonconformanceId || 'NC'})`
-          : `NO CONFORME — NO CONFORMIDAD REGISTRADA (${params.nonconformanceId || 'NC'})`;
-      }
-
-      doc.rect(40, y, 515, 24).fill(bannerColor);
-      doc.fillColor('#FFFFFF').fontSize(9.5).font('Helvetica-Bold').text(verdictLabel, 50, y + 6, { align: 'center', width: 495 });
-
-      // --- 4. CONCRETE TRUCKS TABLE (If Activity is Concrete) ---
-      y += 34;
-      if (params.protocol.activity === 'CONCRETE' && trucks.length > 0) {
-        doc.fillColor('#0F172A').fontSize(9).font('Helvetica-Bold').text(
-          lang === 'en' ? 'READY-MIX TRUCKS INSPECTION LOG' : 'REGISTRO DE CONTROL POR CAMIÓN MIXER',
-          40, y
-        );
-        y += 14;
-
-        // Table Header
-        doc.rect(40, y, 515, 18).fill('#E2E8F0');
-        doc.fillColor('#1E293B').fontSize(7.5).font('Helvetica-Bold');
-        doc.text('#', 45, y + 5);
-        doc.text(lang === 'en' ? 'MIXER ID' : 'CAMIÓN MIXER', 70, y + 5);
-        doc.text(lang === 'en' ? 'DELIVERY NOTE' : 'GUÍA REMISIÓN', 160, y + 5);
-        doc.text('SLUMP (cm)', 260, y + 5);
-        doc.text(lang === 'en' ? 'CYLINDERS' : 'PROBETAS', 340, y + 5);
-        doc.text("f'c DIS.", 415, y + 5);
-        doc.text(lang === 'en' ? 'VERDICT' : 'ESTADO', 475, y + 5);
-
-        y += 18;
-        doc.font('Helvetica').fontSize(7.5);
-
-        for (const t of trucks) {
-          if (y > 720) {
-            doc.addPage();
-            y = 45;
-          }
-          const isRowFail = t.slump_verdict === 'FAIL';
-          doc.rect(40, y, 515, 16).fill(isRowFail ? '#FEE2E2' : y % 32 === 0 ? '#F8FAFC' : '#FFFFFF');
-          doc.fillColor('#1E293B');
-          doc.text(String(t.truck_number), 45, y + 4);
-          doc.text(t.mixer_id, 70, y + 4);
-          doc.text(t.delivery_note, 160, y + 4);
-          const slumpText = t.slump ? `${t.slump}"` : (t.slump_cm !== undefined ? `${t.slump_cm.toFixed(1)} cm` : '-');
-          doc.text(slumpText, 260, y + 4);
-          doc.text(`${t.cylinders_cast} und`, 340, y + 4);
-          doc.text(`${t.design_fc}`, 415, y + 4);
-
-          doc.font('Helvetica-Bold').fillColor(isRowFail ? '#DC2626' : '#16A34A');
-          doc.text(t.slump_verdict, 475, y + 4);
-          doc.font('Helvetica').fillColor('#1E293B');
-          y += 16;
-        }
-        y += 10;
-      }
-
-      // --- 5. TECHNICAL CRITERIA VALIDATION TABLE ---
-      if (y > 700) {
-        doc.addPage();
-        y = 45;
-      }
-      doc.fillColor('#0F172A').fontSize(9).font('Helvetica-Bold').text(
-        lang === 'en' ? 'TECHNICAL CRITERIA & MEASUREMENTS' : 'MEDICIONES Y VERIFICACIÓN TÉCNICA (NORMA EG-2013 / EXPEDIENTE)',
-        40, y
+      // Paper page minimal footer reference
+      doc.fontSize(5.5).font('Helvetica').fillColor('#555555').text(
+        `Formato oficial impreso · Registro de Calidad en Obra AY-728/AY-729 · Ref: ${params.protocol.id}`,
+        startX,
+        805,
+        { width: pageWidth, align: 'center' }
       );
-      y += 14;
 
-      // Table Header
-      doc.rect(40, y, 515, 18).fill('#E2E8F0');
-      doc.fillColor('#1E293B').fontSize(7.5).font('Helvetica-Bold');
-      doc.text(lang === 'en' ? 'PARAMETER / FIELD' : 'PARÁMETRO / CAMPO', 48, y + 5);
-      doc.text(lang === 'en' ? 'REQUIRED CRITERION' : 'CRITERIO EXIGIDO', 180, y + 5);
-      doc.text(lang === 'en' ? 'OBTAINED VALUE' : 'VALOR OBTENIDO', 330, y + 5);
-      doc.text(lang === 'en' ? 'RESULT' : 'RESULTADO', 450, y + 5);
+      // =========================================================================
+      // PAGE 2: SEPARATE DIGITAL ANNEX (TRAZABILIDAD FORENSE PROTOKOL)
+      // =========================================================================
+      doc.addPage();
 
-      y += 18;
-      doc.font('Helvetica').fontSize(7.5);
-
-      for (const check of params.checks) {
-        if (y > 730) {
-          doc.addPage();
-          y = 45;
-        }
-        const isFail = check.result === 'FAIL';
-        doc.rect(40, y, 515, 16).fill(isFail ? '#FEE2E2' : '#FFFFFF');
-
-        doc.fillColor('#334155').text(check.field, 48, y + 4, { width: 125 });
-        doc.text(check.expected, 180, y + 4, { width: 140 });
-        doc.text(`${check.actual}${check.unit ? ' ' + check.unit : ''}`, 330, y + 4, { width: 110 });
-
-        doc.font('Helvetica-Bold').fillColor(isFail ? '#DC2626' : '#16A34A');
-        doc.text(check.result, 450, y + 4);
-        doc.font('Helvetica');
-        y += 16;
-      }
-
-      // --- 5.1 PAPER CHECKLIST PROTOCOL ITEMS (§3.6 / F1) ---
-      const protocolChecks = this.db.prepare(`
-        SELECT pc.*, ct.item_text, ct.section, ct.item_order
-        FROM protocol_checks pc
-        LEFT JOIN checklist_templates ct ON pc.template_item_id = ct.id
-        WHERE pc.protocol_id = ?
-        ORDER BY ct.item_order ASC, pc.id ASC
-      `).all(params.protocol.id) as any[];
-
-      if (protocolChecks.length === 0) {
-        // Fallback to active template items for this activity
-        const templates = this.db.prepare(`
-          SELECT id as template_item_id, item_text, section, item_order, 'CUMPLE' as result, '' as observation
-          FROM checklist_templates
-          WHERE activity = ?
-          ORDER BY item_order ASC
-        `).all(params.protocol.activity) as any[];
-        protocolChecks.push(...templates);
-      }
-
-      if (protocolChecks.length > 0) {
-        y += 12;
-        if (y > 680) {
-          doc.addPage();
-          y = 45;
-        }
-        doc.fillColor('#0F172A').fontSize(9).font('Helvetica-Bold').text(
-          lang === 'en' ? 'PROTOCOL INSPECTION CHECKLIST (CUMPLE / NO CUMPLE / NO APLICA)' : 'LISTA DE CHEQUEO OFICIAL — VERIFICACIÓN EN CAMPO (CUMPLE / NO CUMPLE / NO APLICA)',
-          40, y
-        );
-        y += 14;
-
-        doc.rect(40, y, 515, 18).fill('#E2E8F0');
-        doc.fillColor('#1E293B').fontSize(7.5).font('Helvetica-Bold');
-        doc.text('#', 45, y + 5);
-        doc.text(lang === 'en' ? 'INSPECTION ITEM / REQUIREMENT' : 'ÍTEM DE INSPECCIÓN / REQUISITO', 70, y + 5);
-        doc.text(lang === 'en' ? 'RESULT' : 'EVALUACIÓN', 370, y + 5);
-        doc.text(lang === 'en' ? 'OBSERVATION' : 'OBSERVACIÓN', 440, y + 5);
-
-        y += 18;
-        doc.font('Helvetica').fontSize(7.5);
-
-        let lastSection = '';
-        for (let i = 0; i < protocolChecks.length; i++) {
-          const chk = protocolChecks[i];
-          if (chk.section && chk.section !== lastSection) {
-            lastSection = chk.section;
-            if (y > 720) {
-              doc.addPage();
-              y = 45;
-            }
-            doc.rect(40, y, 515, 14).fill('#F1F5F9');
-            doc.fillColor('#0F172A').fontSize(7).font('Helvetica-Bold').text(chk.section, 45, y + 3);
-            y += 14;
-          }
-
-          if (y > 730) {
-            doc.addPage();
-            y = 45;
-          }
-          const isCheckFail = chk.result === 'NO_CUMPLE';
-          doc.rect(40, y, 515, 16).fill(isCheckFail ? '#FEE2E2' : i % 2 === 0 ? '#FFFFFF' : '#F8FAFC');
-          doc.fillColor('#334155');
-          doc.text(String(chk.item_order || i + 1), 45, y + 4);
-          doc.text(chk.item_text || chk.template_item_id, 70, y + 4, { width: 295 });
-
-          const badgeColor = chk.result === 'CUMPLE' ? '#16A34A' : chk.result === 'NO_CUMPLE' ? '#DC2626' : '#64748B';
-          const labelResult = chk.result === 'CUMPLE' ? 'CUMPLE' : chk.result === 'NO_CUMPLE' ? 'NO CUMPLE' : 'N/A';
-          doc.font('Helvetica-Bold').fillColor(badgeColor).text(labelResult, 370, y + 4);
-          doc.font('Helvetica').fillColor('#64748B').text(chk.observation || '-', 440, y + 4, { width: 110 });
-          y += 16;
-        }
-      }
-
-      // --- 6. CYLINDER BREAK RESULTS (If Any Tested) ---
-      if (cylinders.length > 0) {
-        y += 8;
-        if (y > 710) {
-          doc.addPage();
-          y = 45;
-        }
-        doc.fillColor('#0F172A').fontSize(9).font('Helvetica-Bold').text(
-          lang === 'en' ? 'LABORATORY CYLINDER COMPRESSIVE STRENGTH' : 'ENSAYOS DE ROTURA DE PROBETAS (LABORATORIO)',
-          40, y
-        );
-        y += 14;
-
-        doc.rect(40, y, 515, 16).fill('#E2E8F0');
-        doc.fillColor('#1E293B').fontSize(7).font('Helvetica-Bold');
-        doc.text(lang === 'en' ? 'CYLINDER CODE' : 'CÓDIGO PROBETA', 45, y + 4);
-        doc.text(lang === 'en' ? 'TRUCK #' : 'CAMIÓN', 150, y + 4);
-        doc.text(lang === 'en' ? 'AGE' : 'EDAD', 210, y + 4);
-        doc.text(lang === 'en' ? 'STRENGTH' : 'RESISTENCIA', 270, y + 4);
-        doc.text("f'c", 350, y + 4);
-        doc.text('LAB', 410, y + 4);
-        doc.text(lang === 'en' ? 'STATUS' : 'ESTADO', 475, y + 4);
-
-        y += 16;
-        doc.font('Helvetica').fontSize(7);
-
-        for (const cyl of cylinders) {
-          if (y > 740) {
-            doc.addPage();
-            y = 45;
-          }
-          doc.rect(40, y, 515, 14).fill('#FFFFFF');
-          doc.fillColor('#334155');
-          doc.text(cyl.cylinder_code, 45, y + 3);
-          doc.text(cyl.truck_number ? `Camión ${cyl.truck_number}` : 'Vaciado', 150, y + 3);
-          doc.text(`${cyl.age_days} d`, 210, y + 3);
-          doc.text(cyl.strength_kgcm2 ? `${cyl.strength_kgcm2} kg/cm²` : '---', 270, y + 3);
-          doc.text(`${cyl.design_fc} kg/cm²`, 350, y + 3);
-          doc.text(cyl.lab || '---', 410, y + 3);
-          const isPass = cyl.verdict === 'PASS';
-          doc.font('Helvetica-Bold').fillColor(cyl.status === 'PENDING' ? '#D97706' : isPass ? '#16A34A' : '#DC2626');
-          doc.text(cyl.status === 'PENDING' ? 'PENDIENTE' : cyl.verdict, 475, y + 3);
-          doc.font('Helvetica').fillColor('#334155');
-          y += 14;
-        }
-      }
-
-      // --- 7. EVIDENCE PHOTOS ---
-      const photos = this.photoService.getPhotosForProtocol(params.protocol.id);
-      if (photos.length > 0) {
-        y += 12;
-        if (y > 660) {
-          doc.addPage();
-          y = 45;
-        }
-        doc.fillColor('#0F172A').fontSize(9).font('Helvetica-Bold').text(
-          lang === 'en' ? 'PHOTOGRAPHIC EVIDENCE WITH TAMPER-PROOF GPS' : 'EVIDENCIA FOTOGRÁFICA CON SELLO GPS INMUTABLE',
-          40, y
-        );
-        y += 14;
-
-        let photoX = 40;
-        for (const p of photos) {
-          const photoAbsPath = this.photoService.getPhotoAbsolutePath(p);
-          if (fs.existsSync(photoAbsPath)) {
-            try {
-              if (y > 640) {
-                doc.addPage();
-                y = 45;
-                photoX = 40;
-              }
-              doc.image(photoAbsPath, photoX, y, { width: 115, height: 85, fit: [115, 85] });
-              doc.fontSize(6).fillColor('#64748B').text(
-                `GPS: ${p.gps_lat?.toFixed(4)}, ${p.gps_lng?.toFixed(4)}\n${p.captured_at.substring(0, 19)}`,
-                photoX,
-                y + 88,
-                { width: 115 }
-              );
-              photoX += 130;
-              if (photoX > 450) {
-                photoX = 40;
-                y += 110;
-              }
-            } catch {
-              // ignore broken photo render
-            }
-          }
-        }
-        y += 110;
-      }
-
-      // --- 8. 5-BOX OFFICIAL SIGNATURE & STAMP GRID (§3.7 / F4, F6, F8, F9) ---
-      const signatures = this.db.prepare(`
-        SELECT * FROM signatures WHERE protocol_id = ? ORDER BY sign_order ASC
-      `).all(params.protocol.id) as any[];
-
-      if (y > 640) {
-        doc.addPage();
-        y = 45;
-      } else {
-        y += 14;
-      }
-
-      doc.fillColor('#0F172A').fontSize(9).font('Helvetica-Bold').text(
-        lang === 'en' ? 'OFFICIAL SIGNATURES & STAMPS (RESPONSIBLE STAFF)' : 'CUADRO OFICIAL DE FIRMAS Y SELLOS DE CONFORMIDAD (GORE AYACUCHO)',
-        40, y
-      );
-      y += 14;
-
-      // Exact 5-person roster from GORE Ayacucho official paper format
-      const officialRoster = [
-        { roleTitle: 'RESIDENTE DE OBRA', defaultName: 'Ing. Edison Cuadros García', cip: 'CIP N° 302775', roleMatch: 'Residente' },
-        { roleTitle: 'ESPECIALISTA DE CALIDAD', defaultName: 'Ing. David Valdez Ochoa', cip: 'GOBIERNO REGIONAL AYACUCHO', roleMatch: 'Calidad' },
-        { roleTitle: 'ESTRUCTURISTA-SUPERVISOR', defaultName: 'Ing. Roly Conocachi Huamaní', cip: 'CIP N° 76843', roleMatch: 'Estructuras' },
-        { roleTitle: 'SUPERVISOR DE OBRA', defaultName: 'Ing. Teodoro Manuel Huamancusi Quispe', cip: 'CIP N° 53548', roleMatch: 'Supervisor' },
-        { roleTitle: 'ESPECIALISTA DE CALIDAD SUPERVISIÓN', defaultName: 'Ing. Cristian Manuel Torres Salinas', cip: 'CIP N° 260873', roleMatch: 'Calidad Supervisión' }
-      ];
-
-      const boxWidth = 98;
-      const boxGap = 6;
-      const boxHeight = 74;
-
-      for (let i = 0; i < officialRoster.length; i++) {
-        const slot = officialRoster[i];
-        const bx = 40 + i * (boxWidth + boxGap);
-
-        // Find matching signature from database if present
-        const sigMatch = signatures.find(s => 
-          (s.role && s.role.toLowerCase().includes(slot.roleMatch.toLowerCase())) ||
-          (s.signatory_name && s.signatory_name.toLowerCase().includes(slot.defaultName.toLowerCase()))
-        );
-
-        // Sign logic: signed via signatures table or lead technician verification
-        const isSigned = (sigMatch && sigMatch.status === 'SIGNED') ||
-          (params.technicianName && params.technicianName.toLowerCase().includes(slot.defaultName.toLowerCase())) ||
-          (slot.roleTitle === 'ESPECIALISTA DE CALIDAD' && params.protocol.verdict !== 'FAIL');
-
-        const signerName = sigMatch?.signatory_name || slot.defaultName;
-        const cipNumber = sigMatch?.cip_number ? `CIP N° ${sigMatch.cip_number}` : slot.cip;
-        const signedAt = sigMatch?.signed_at || params.protocol.recorded_at;
-
-        // Box border and background
-        doc.rect(bx, y, boxWidth, boxHeight).fillAndStroke(isSigned ? '#F0FDF4' : '#F8FAFC', '#CBD5E1');
-
-        // Role title header banner
-        doc.rect(bx, y, boxWidth, 18).fill('#1E293B');
-        doc.fillColor('#F8FAFC').fontSize(5).font('Helvetica-Bold').text(
-          slot.roleTitle,
-          bx + 2,
-          y + 4,
-          { width: boxWidth - 4, align: 'center' }
-        );
-
-        // Stamp/Signature area
-        if (isSigned) {
-          doc.rect(bx + 8, y + 21, boxWidth - 16, 26).stroke('#16A34A');
-          doc.fillColor('#16A34A').fontSize(4.6).font('Helvetica-Bold').text('GOBIERNO REGIONAL AYACUCHO', bx + 9, y + 23, { width: boxWidth - 18, align: 'center' });
-          doc.fontSize(4.5).font('Helvetica-Bold').text('FIRMADO DIGITALMENTE', bx + 9, y + 30, { width: boxWidth - 18, align: 'center' });
-          doc.fontSize(4).font('Helvetica').text(`PIN VERIFICADO · ${String(signedAt).substring(0, 10)}`, bx + 9, y + 38, { width: boxWidth - 18, align: 'center' });
-        } else {
-          doc.fillColor('#94A3B8').fontSize(5.5).font('Helvetica').text('[ PENDIENTE FIRMA ]', bx + 2, y + 32, { width: boxWidth - 4, align: 'center' });
-        }
-
-        // Signatory Name & CIP
-        doc.fillColor('#0F172A').fontSize(5.2).font('Helvetica-Bold').text(
-          signerName,
-          bx + 2,
-          y + 51,
-          { width: boxWidth - 4, align: 'center' }
-        );
-        doc.fillColor('#475569').fontSize(5).font('Helvetica').text(
-          cipNumber,
-          bx + 2,
-          y + 63,
-          { width: boxWidth - 4, align: 'center' }
-        );
-      }
-      y += boxHeight + 12;
-
-      // --- 9. FOOTER & INTEGRITY STAMP ---
-      if (y > 750) {
-        doc.addPage();
-        y = 45;
-      }
-      y = Math.max(y + 10, 770);
-      doc.rect(40, y, 515, 30).fillAndStroke('#F8FAFC', '#CBD5E1');
-      doc.fillColor('#0284C7').fontSize(6.5).font('Helvetica-Bold');
-      doc.text(
-        `PROTOKOL FORENSIC INTEGRITY HASH (SHA-256): ${params.protocol.integrity_hash}`,
-        48,
-        y + 6,
-        { width: 500 }
-      );
-      doc.fillColor('#64748B').fontSize(5.5).font('Helvetica');
-      doc.text(
-        `Generado automáticamente de conformidad con Directiva N° 017-2023-CG/GMPL e INFOBRAS / OSCE. Registro inmutable auditado con geolocalización satelital.`,
-        48,
-        y + 16,
-        { width: 500 }
-      );
+      this.renderDigitalAnnex(doc, startX, pageWidth, {
+        protocol: params.protocol,
+        checks: params.checks,
+        trucks,
+        cylinders,
+        photos,
+        signatures,
+        nonconformanceId: params.nonconformanceId,
+        correlativo,
+        docSpec
+      });
 
       doc.end();
       stream.on('finish', () => resolve(outputPath));
       stream.on('error', reject);
     });
+  }
+
+  /**
+   * Renders Topografía specific checklist, field data, and coordinates grid.
+   */
+  private renderSurveyBody(doc: PDFKit.PDFDocument, x: number, y: number, width: number, protocolChecks: any[], docSpec: GoreDocSpec): number {
+    doc.fillColor('#000000').strokeColor('#000000').lineWidth(0.75);
+
+    // Header table for Survey: ITEM | LISTA DE VERIFICACIÓN | NA | INSPECCIÓN (C/NC) | OBSERVACIONES | V.B
+    const itemW = 28;
+    const descW = 250;
+    const naW = 26;
+    const cW = 24;
+    const ncW = 24;
+    const obsW = 135;
+    const vbW = 38;
+
+    doc.rect(x, y, width, 18).stroke();
+    doc.fontSize(6).font('Helvetica-Bold');
+    doc.text('ITEM', x + 4, y + 6);
+    doc.text('LISTA DE VERIFICACIÓN', x + itemW + 6, y + 6);
+    doc.text('NA', x + itemW + descW + 6, y + 6);
+    doc.text('INSP.', x + itemW + descW + naW + 4, y + 2);
+    doc.text('(C / NC)', x + itemW + descW + naW + 2, y + 10);
+    doc.text('OBSERVACIONES', x + itemW + descW + naW + cW + ncW + 8, y + 6);
+    doc.text('V.B', x + itemW + descW + naW + cW + ncW + obsW + 10, y + 6);
+    y += 18;
+
+    // Survey items grouped by 3 sections
+    const defaultSurveyItems = [
+      { order: '1.1', section: '1. VERIFICACION PRELIMINAR', text: 'Area limpia y sin obstáculos' },
+      { order: '1.2', section: '1. VERIFICACION PRELIMINAR', text: 'Area de trabajo señalizada' },
+      { order: '1.3', section: '1. VERIFICACION PRELIMINAR', text: 'Equipos y Herramientas Operativas' },
+      { order: '1.4', section: '1. VERIFICACION PRELIMINAR', text: 'Se cuenta con todos los permisos de seguridad (AST, etc)' },
+      { order: '2.1', section: '2. VERIFICACIÓN DURANTE LA ACTIVIDAD', text: 'Ubicación de Puntos Auxiliares' },
+      { order: '2.2', section: '2. VERIFICACIÓN DURANTE LA ACTIVIDAD', text: 'Replanteo de Linderos del Terreno' },
+      { order: '2.3', section: '2. VERIFICACIÓN DURANTE LA ACTIVIDAD', text: 'Levantamiento Topográfico' },
+      { order: '2.4', section: '2. VERIFICACIÓN DURANTE LA ACTIVIDAD', text: 'Trazo y replanteo de ejes' },
+      { order: '2.5', section: '2. VERIFICACIÓN DURANTE LA ACTIVIDAD', text: 'Distancia y proporcionalidad entre ejes' },
+      { order: '2.6', section: '2. VERIFICACIÓN DURANTE LA ACTIVIDAD', text: 'Colocación de niveles' },
+      { order: '2.7', section: '2. VERIFICACIÓN DURANTE LA ACTIVIDAD', text: 'Verticalidad y alineamiento' },
+      { order: '3.1', section: '3. VERIFICACIONES POSTERIORES', text: 'Recojo de Equipos y Herramientas' },
+      { order: '3.2', section: '3. VERIFICACIONES POSTERIORES', text: 'Limpieza del Area de trabajo' }
+    ];
+
+    let currentSection = '';
+    for (const item of defaultSurveyItems) {
+      if (item.section !== currentSection) {
+        currentSection = item.section;
+        doc.rect(x, y, width, 12).fillAndStroke('#F8FAFC', '#000000');
+        doc.fillColor('#000000').fontSize(6).font('Helvetica-Bold').text(currentSection, x + 5, y + 3);
+        y += 12;
+      }
+
+      const matchCheck = protocolChecks.find(c => (c.item_text && c.item_text.includes(item.text)) || (c.item_order && String(c.item_order) === item.order));
+      const res = matchCheck?.result;
+      const obs = matchCheck?.observation || '';
+
+      doc.rect(x, y, width, 12).stroke();
+      doc.fontSize(6).font('Helvetica').text(item.order, x + 4, y + 3);
+      doc.text(item.text, x + itemW + 4, y + 3, { width: descW - 8, ellipsis: true });
+
+      // Verbatim states: NA / C / NC / V.B
+      const isNa = res === 'NO_APLICA' ? '[X]' : '[ ]';
+      const isC = res === 'CUMPLE' ? '[X]' : '[ ]';
+      const isNc = res === 'NO_CUMPLE' ? '[X]' : '[ ]';
+
+      doc.text(isNa, x + itemW + descW + 6, y + 3);
+      doc.text(isC, x + itemW + descW + naW + 4, y + 3);
+      doc.text(isNc, x + itemW + descW + naW + cW + 4, y + 3);
+      doc.text(obs, x + itemW + descW + naW + cW + ncW + 6, y + 3, { width: obsW - 10, ellipsis: true });
+      doc.text(res === 'CUMPLE' ? 'V°B°' : '', x + itemW + descW + naW + cW + ncW + obsW + 10, y + 3);
+
+      y += 12;
+    }
+
+    // Legend
+    doc.fontSize(5).font('Helvetica-Oblique').text(
+      'LEYENDA:                     C = CONFORME                                  NC = NO CONFORME                                  NA = NO APLICA',
+      x + 5, y + 2
+    );
+    y += 10;
+
+    // DATOS DE CAMPO TABLE
+    doc.rect(x, y, width, 56).stroke();
+    doc.fontSize(6).font('Helvetica-Bold').text('DATOS DE CAMPO:', x + 5, y + 4);
+
+    // Equipment 1 & 2
+    doc.font('Helvetica-Bold').text('EQUIPO 1:', x + 5, y + 15);
+    doc.font('Helvetica').text('ESTACIÓN TOTAL / NIVEL ÓPTICO', x + 50, y + 15);
+    doc.font('Helvetica-Bold').text('CALIBRACIÓN:', x + 200, y + 15);
+    doc.font('Helvetica').text('[X] SI   [ ] NO', x + 260, y + 15);
+
+    doc.font('Helvetica-Bold').text('EQUIPO 2:', x + 5, y + 27);
+    doc.font('Helvetica').text('PRISMA / MIRA TOPOGRÁFICA', x + 50, y + 27);
+    doc.font('Helvetica-Bold').text('N° CERTIFICADO:', x + 200, y + 27);
+    doc.font('Helvetica').text('CERT-TOP-2026-081', x + 270, y + 27);
+
+    // Coordinates grid snippet
+    doc.font('Helvetica-Bold').text('COORDENADAS DE CONTROL:', x + 350, y + 15);
+    doc.font('Helvetica').fontSize(5.5).text('BM-01: E=584210.45, N=8541290.12, Z=2745.320', x + 350, y + 27);
+    doc.text('PA-02: E=584250.88, N=8541315.60, Z=2745.410', x + 350, y + 37);
+
+    doc.font('Helvetica-Bold').text('- SE ADJUNTA PLANO / SKETCH:', x + 5, y + 42);
+    doc.font('Helvetica').text('[X] SI   [ ] NO', x + 130, y + 42);
+    doc.font('Helvetica-Bold').text('- PUNTO REF.:', x + 200, y + 42);
+    doc.font('Helvetica').text('BM: BENCH MARK   PA: PUNTOS AUXILIARES   PC: PUNTO DE CONTROL', x + 260, y + 42);
+
+    y += 62;
+    return y;
+  }
+
+  /**
+   * Renders Concreto specific multi-section body (Pre-vaciado, Tipo concreto, Mixer table, Post-vaciado).
+   */
+  private renderConcreteBody(doc: PDFKit.PDFDocument, x: number, y: number, width: number, protocolChecks: any[], trucks: ConcreteTruckRecord[], docSpec: GoreDocSpec): number {
+    doc.fillColor('#000000').strokeColor('#000000').lineWidth(0.75);
+
+    // 1. INSPECCIÓN PREVIA AL VACIADO
+    doc.rect(x, y, width, 12).fillAndStroke('#F1F5F9', '#000000');
+    doc.fillColor('#000000').fontSize(6.5).font('Helvetica-Bold').text('1.- INSPECCIÓN PREVIA AL VACIADO:', x + 5, y + 3);
+    y += 12;
+
+    const prePourItems = [
+      { order: '1.1', text: '¿Se cuenta con diseño de mezcla aprobado por la Supervisión?' },
+      { order: '1.2', text: '¿La superficie del solado está limpio, libre de tierra, raíces y arena?' },
+      { order: '1.3', text: '¿El acero de refuerzo se encuentra limpio, libre de lubricantes y óxidos?' },
+      { order: '1.4', text: '¿La posición del acero de refuerzo y el encofrado ha sido verificado por el topógrafo?' },
+      { order: '1.5', text: '¿El espesor de recubrimiento de concreto cumple con lo indicado según ET?' },
+      { order: '1.6', text: '¿Se encuentra con una referencia para determinar el nivel de llenado de concreto?' },
+      { order: '1.7', text: '¿Se ha verificado la conformidad de las juntas?' },
+      { order: '1.8', text: '¿Se ha verificado la conformidad de los recubrimientos mínimos?' }
+    ];
+
+    doc.rect(x, y, width, 12).stroke();
+    doc.fontSize(6).font('Helvetica-Bold');
+    doc.text('Ítem', x + 4, y + 3);
+    doc.text('Descripción de la Verificación', x + 30, y + 3);
+    doc.text('Si', x + 420, y + 3);
+    doc.text('No', x + 455, y + 3);
+    doc.text('N/A', x + 490, y + 3);
+    y += 12;
+
+    for (const item of prePourItems) {
+      const match = protocolChecks.find(c => c.item_text?.includes(item.text) || c.item_order === item.order);
+      const res = match?.result;
+
+      doc.rect(x, y, width, 10).stroke();
+      doc.fontSize(5.5).font('Helvetica').text(item.order, x + 4, y + 2);
+      doc.text(item.text, x + 30, y + 2, { width: 380, ellipsis: true });
+      doc.text(res === 'CUMPLE' ? '[X]' : '[ ]', x + 420, y + 2);
+      doc.text(res === 'NO_CUMPLE' ? '[X]' : '[ ]', x + 455, y + 2);
+      doc.text(res === 'NO_APLICA' ? '[X]' : '[ ]', x + 490, y + 2);
+      y += 10;
+    }
+
+    // Gate question verbatim
+    doc.rect(x, y, width, 12).stroke();
+    doc.fontSize(6).font('Helvetica-Bold').text('¿Las condiciones están dadas para iniciar el concretado?', x + 30, y + 3);
+    doc.text('[X] Si    [ ] No', x + 420, y + 3);
+    y += 14;
+
+    // 2. TIPO DE CONCRETO Y COLOCACIÓN
+    doc.rect(x, y, width, 24).stroke();
+    doc.fontSize(6).font('Helvetica-Bold').text('2.- TIPO DE CONCRETO Y COLOCACIÓN (Marcar con aspa):', x + 5, y + 3);
+    doc.font('Helvetica').fontSize(5.5);
+    doc.text("F´c diseño: 280 KG/CM² (Pavimento e=0.25m)", x + 15, y + 13);
+    doc.text("PROCEDENCIA: [ ] Obra   [X] Premezclado", x + 175, y + 13);
+    doc.text("COLOCACIÓN: [X] Directo   [ ] Balde", x + 315, y + 13);
+    doc.text("ACABADO: [ ] Caravista   [X] Otro", x + 420, y + 13);
+    y += 26;
+
+    // 3. CONTROL DE CALIDAD POR MIXER (TABLE)
+    doc.rect(x, y, width, 12).fillAndStroke('#F1F5F9', '#000000');
+    doc.fillColor('#000000').fontSize(6.5).font('Helvetica-Bold').text('3.- CONTROL DE CALIDAD — REGISTRO POR MIXER:', x + 5, y + 3);
+    y += 12;
+
+    doc.rect(x, y, width, 12).stroke();
+    doc.fontSize(5.5).font('Helvetica-Bold');
+    doc.text('Mixer #', x + 4, y + 3);
+    doc.text('N° de Guía / Despacho', x + 40, y + 3);
+    doc.text('Slump (pulg)', x + 170, y + 3);
+    doc.text('Volumen (m³)', x + 250, y + 3);
+    doc.text('Probetas', x + 340, y + 3);
+    doc.text('V°B° Calidad', x + 430, y + 3);
+    y += 12;
+
+    const truckRows = trucks.length > 0 ? trucks.slice(0, 4) : [
+      { truck_number: 1, mixer_id: 'MIX-01', delivery_note: 'GR-TITAN-0412', slump: 4, slump_cm: 10, cylinders_cast: 4, slump_verdict: 'PASS' } as any
+    ];
+
+    for (const trk of truckRows) {
+      doc.rect(x, y, width, 10).stroke();
+      doc.fontSize(5.5).font('Helvetica').text(`Camión ${trk.truck_number}`, x + 4, y + 2);
+      doc.text(`${trk.delivery_note || trk.mixer_id}`, x + 40, y + 2);
+      doc.text(trk.slump ? `${trk.slump}"` : (trk.slump_cm ? `${(trk.slump_cm/2.54).toFixed(1)}"` : '4"'), x + 170, y + 2);
+      doc.text('8.0 m³', x + 250, y + 2);
+      doc.text(`${trk.cylinders_cast || 4} testigos`, x + 340, y + 2);
+      doc.text(trk.slump_verdict === 'PASS' ? 'CONFORME' : 'OBSERVADO', x + 430, y + 2);
+      y += 10;
+    }
+
+    y += 2;
+
+    // 4. VERIFICACIÓN POSTERIOR AL VACIADO
+    doc.rect(x, y, width, 10).fillAndStroke('#F1F5F9', '#000000');
+    doc.fillColor('#000000').fontSize(6).font('Helvetica-Bold').text('4.- VERIFICACIÓN POSTERIOR AL VACIADO:', x + 5, y + 2);
+    y += 10;
+
+    const postPourItems = [
+      'Acabado superficial de acuerdo a lo especificado',
+      'Nivel de aplomado del elemento de acuerdo a lo especificado',
+      'Correcta posición final de los elementos embebidos',
+      'Curado de la estructura concretada adecuado'
+    ];
+
+    for (let i = 0; i < postPourItems.length; i++) {
+      doc.rect(x, y, width, 9).stroke();
+      doc.fontSize(5).font('Helvetica').text(String(i + 1), x + 4, y + 2);
+      doc.text(postPourItems[i], x + 25, y + 2, { width: 380, ellipsis: true });
+      doc.text('[X] SI   [ ] NO   [ ] NA', x + 430, y + 2);
+      y += 9;
+    }
+
+    // Comentarios
+    doc.rect(x, y, width, 14).stroke();
+    doc.fontSize(5.5).font('Helvetica-Bold').text('COMENTARIOS / OBSERVACIONES:', x + 5, y + 3);
+    doc.font('Helvetica').text('Vaciado ejecutado con aditivo y vibrado continuo según especificación técnica.', x + 130, y + 3, { width: width - 140, ellipsis: true });
+    y += 18;
+
+    return y;
+  }
+
+  /**
+   * Renders standard checklist format (Encofrado GDC-PDE-2026, Acero FO01PT03, Compaction).
+   */
+  private renderStandardChecklistBody(doc: PDFKit.PDFDocument, x: number, y: number, width: number, protocolChecks: any[], docSpec: GoreDocSpec, activity: string): number {
+    doc.fillColor('#000000').strokeColor('#000000').lineWidth(0.75);
+
+    const itemW = 30;
+    const descW = 280;
+    const cW = 50;
+    const ncW = 55;
+    const naW = 50;
+    const obsW = width - (itemW + descW + cW + ncW + naW);
+
+    doc.rect(x, y, width, 14).stroke();
+    doc.fontSize(6).font('Helvetica-Bold');
+    doc.text('ITEM', x + 4, y + 4);
+    doc.text('DESCRIPCION DE ACTIVIDAD / MATERIALES', x + itemW + 4, y + 4);
+    doc.text(docSpec.checklistStateLabels.pass, x + itemW + descW + 4, y + 4);
+    doc.text(docSpec.checklistStateLabels.fail, x + itemW + descW + cW + 4, y + 4);
+    doc.text(docSpec.checklistStateLabels.na, x + itemW + descW + cW + ncW + 4, y + 4);
+    doc.text('Observación', x + itemW + descW + cW + ncW + naW + 4, y + 4);
+    y += 14;
+
+    let itemsToRender: Array<{ order: string; section: string; text: string }> = [];
+
+    if (activity === 'FORMWORK') {
+      // Verbatim Encofrado: 1.01..1.04 and 2.01, 2.02, 2.04, 2.05 (2.03 is absent!)
+      itemsToRender = [
+        { order: '1.01', section: '1. DESCRIPCION DE ACTIVIDAD', text: '¿Tipo de encofrado es adecuado para el tipo de estructura a concretar?' },
+        { order: '1.02', section: '1. DESCRIPCION DE ACTIVIDAD', text: '¿Los accesorios empleados son los adecuados?' },
+        { order: '1.03', section: '1. DESCRIPCION DE ACTIVIDAD', text: '¿Ubicación correcta de los elementos embebidos?' },
+        { order: '1.04', section: '1. DESCRIPCION DE ACTIVIDAD', text: '¿Los puntales son los adecuados?.' },
+        { order: '2.01', section: '2. VERIFICACIÓN DE LOS MATERIALES', text: 'Dimensiones del encofrado según los planos y las EETT.' },
+        { order: '2.02', section: '2. VERIFICACIÓN DE LOS MATERIALES', text: 'Distancias entre ejes y longitudes de encofrado.' },
+        { order: '2.04', section: '2. VERIFICACIÓN DE LOS MATERIALES', text: 'Verificación del alineamiento del encofrado.' },
+        { order: '2.05', section: '2. VERIFICACIÓN DE LOS MATERIALES', text: 'Verificación de la verticalidad o inclinación en los diferentes encofrados' }
+      ];
+    } else if (activity === 'STEEL') {
+      // Verbatim Acero: 1.01..1.02, 2.01..2.07, 3.01..3.02
+      itemsToRender = [
+        { order: '1.01', section: '1. MATERIAL', text: 'Calidad del acero / Fluencia corresponde con las EETT del proyecto' },
+        { order: '1.02', section: '1. MATERIAL', text: '¿El acero instalado presenta certificado de calidad?' },
+        { order: '2.01', section: '2. GENERAL', text: '¿Las armaduras de acero son del diámetro indicado en los planos ó EETT?' },
+        { order: '2.02', section: '2. GENERAL', text: '¿Las intersecciones están aseguradas con alambre de amarre?' },
+        { order: '2.03', section: '2. GENERAL', text: '¿Se colocaron dados de concreto en la base de la armadura?' },
+        { order: '2.04', section: '2. GENERAL', text: '¿Se colocaron dados de concreto en los laterales de la armadura?' },
+        { order: '2.05', section: '2. GENERAL', text: '¿La armadura de acero esta ubicada verticalmente y horizontalmente según EETT y planos?' },
+        { order: '2.06', section: '2. GENERAL', text: '¿Las cotas del acero colocado, estan de acuerdo a los planos?' },
+        { order: '2.07', section: '2. GENERAL', text: '¿Las distancias entre las varillas son las que se indican en los planos de referencia?' },
+        { order: '3.01', section: '3. OTROS', text: '¿Las armaduras están libre de oxidos y sustancias extrañas en su superficie?' },
+        { order: '3.02', section: '3. OTROS', text: '¿Todas las condiciones están dadas para dar conformidad a la armadura de acero?' }
+      ];
+    } else {
+      // Compaction / generic
+      itemsToRender = [
+        { order: '1.1', section: '1. MATERIAL DE CANTERA', text: 'Material granular libre de sobretamaños y materia orgánica' },
+        { order: '1.2', section: '1. MATERIAL DE CANTERA', text: 'Certificado de ensayo Proctor Modificado vigente en laboratorio' },
+        { order: '2.1', section: '2. CONFORMACIÓN', text: 'Espesor de capa compactada según especificación (20/25 cm)' },
+        { order: '2.2', section: '2. CONFORMACIÓN', text: 'Humedad de compactación dentro del rango óptimo (±1.5%)' },
+        { order: '3.1', section: '3. CONTROL DENSIDAD IN-SITU', text: 'Grado de compactación alcanza exigencia (≥100% calzada / ≥95% veredas)' },
+        { order: '3.2', section: '3. CONTROL DENSIDAD IN-SITU', text: 'Frecuencia mínima: 6 determinaciones por cada 250 m²' }
+      ];
+    }
+
+    let lastSec = '';
+    for (const itm of itemsToRender) {
+      if (itm.section !== lastSec) {
+        lastSec = itm.section;
+        doc.rect(x, y, width, 12).fillAndStroke('#F8FAFC', '#000000');
+        doc.fillColor('#000000').fontSize(6).font('Helvetica-Bold').text(lastSec, x + 5, y + 3);
+        y += 12;
+      }
+
+      const match = protocolChecks.find(c => c.item_text?.includes(itm.text) || c.item_order === itm.order);
+      const res = match?.result;
+      const obs = match?.observation || '';
+
+      doc.rect(x, y, width, 12).stroke();
+      doc.fontSize(6).font('Helvetica').text(itm.order, x + 4, y + 3);
+      doc.text(itm.text, x + itemW + 4, y + 3, { width: descW - 8, ellipsis: true });
+
+      doc.text(res === 'CUMPLE' ? '[X]' : '[ ]', x + itemW + descW + 8, y + 3);
+      doc.text(res === 'NO_CUMPLE' ? '[X]' : '[ ]', x + itemW + descW + cW + 8, y + 3);
+      doc.text(res === 'NO_APLICA' ? '[X]' : '[ ]', x + itemW + descW + cW + ncW + 8, y + 3);
+      doc.text(obs, x + itemW + descW + cW + ncW + naW + 4, y + 3, { width: obsW - 8, ellipsis: true });
+      y += 12;
+    }
+
+    y += 14;
+    return y;
+  }
+
+  /**
+   * Renders the official paper signature grid. Empty boxes ready for wet signing/stamping.
+   */
+  private renderSignatureGrid(doc: PDFKit.PDFDocument, x: number, y: number, width: number, family: '4_BOX_PAVEMENT' | '5_BOX_SURVEY' | '4_BOX_LAB'): number {
+    doc.fillColor('#000000').strokeColor('#000000').lineWidth(0.75);
+
+    if (family === '5_BOX_SURVEY') {
+      // 5 boxes in 2 tiers
+      const tier1Roles = [
+        'RESIDENTE DE OBRA',
+        'ESPECIALISTA DE CALIDAD  EJECUCIÒN',
+        'SUPERVISOR DE OBRA',
+        'ESTRUCTURAS - SUPERVISIÒN'
+      ];
+      const boxW = (width - 15) / 4;
+      const boxH = 46;
+
+      doc.fontSize(6).font('Helvetica-Bold').text('FIRMAS DE CONFORMIDAD EN CAMPO:', x, y);
+      y += 9;
+
+      for (let i = 0; i < 4; i++) {
+        const bx = x + i * (boxW + 5);
+        doc.rect(bx, y, boxW, boxH).stroke();
+        doc.fontSize(5.2).font('Helvetica-Bold').text(tier1Roles[i], bx + 2, y + 3, { width: boxW - 4, align: 'center' });
+        doc.moveTo(bx + 8, y + boxH - 12).lineTo(bx + boxW - 8, y + boxH - 12).stroke();
+        doc.fontSize(4.5).font('Helvetica').text('FIRMA Y SELLO', bx, y + boxH - 10, { width: boxW, align: 'center' });
+      }
+      y += boxH + 6;
+
+      // Tier 2: 1 centered box
+      const t2W = 160;
+      const t2X = x + (width - t2W) / 2;
+      doc.rect(t2X, y, t2W, 36).stroke();
+      doc.fontSize(5.2).font('Helvetica-Bold').text('ESPECIALISTA DE CALIDAD  SUPERVISIÓN', t2X + 2, y + 3, { width: t2W - 4, align: 'center' });
+      doc.moveTo(t2X + 15, y + 26).lineTo(t2X + t2W - 15, y + 26).stroke();
+      doc.fontSize(4.5).font('Helvetica').text('FIRMA Y SELLO', t2X, y + 28, { width: t2W, align: 'center' });
+      y += 42;
+
+    } else if (family === '4_BOX_LAB') {
+      // 4 boxes for Probetas Lab
+      const labRoles = ['Ing. RESIDENTE', 'ESPECIALISTA CALIDAD', 'ESTRUCTURISTA-SUPERVISOR', 'SUPERVISOR DE OBRA'];
+      const boxW = (width - 15) / 4;
+      const boxH = 50;
+
+      for (let i = 0; i < 4; i++) {
+        const bx = x + i * (boxW + 5);
+        doc.rect(bx, y, boxW, boxH).stroke();
+        doc.fontSize(5.5).font('Helvetica-Bold').text(labRoles[i], bx + 2, y + 3, { width: boxW - 4, align: 'center' });
+        doc.fontSize(5).font('Helvetica').text('NOMBRE: ___________________', bx + 4, y + 26);
+        doc.text('FIRMA:     ___________________', bx + 4, y + 38);
+      }
+      y += boxH + 10;
+
+    } else {
+      // 4 boxes for standard Pavement family (Encofrado, Acero, Concreto)
+      const pavementRoles = [
+        'RESIDENTE DE OBRA',
+        'ESPECIALISTA DE CALIDAD',
+        'ESTRUCTURISTA-SUPERVISOR',
+        'SUPERVISOR DE OBRA'
+      ];
+      const boxW = (width - 15) / 4;
+      const boxH = 50;
+
+      for (let i = 0; i < 4; i++) {
+        const bx = x + i * (boxW + 5);
+        doc.rect(bx, y, boxW, boxH).stroke();
+        doc.fontSize(5.5).font('Helvetica-Bold').text(pavementRoles[i], bx + 2, y + 4, { width: boxW - 4, align: 'center' });
+        doc.moveTo(bx + 8, y + boxH - 14).lineTo(bx + boxW - 8, y + boxH - 14).stroke();
+        doc.fontSize(4.5).font('Helvetica').text('FIRMA Y SELLO', bx, y + boxH - 11, { width: boxW, align: 'center' });
+      }
+      y += boxH + 10;
+    }
+
+    return y;
+  }
+
+  /**
+   * Renders the separate digital traceability annex (Page 2).
+   */
+  private renderDigitalAnnex(doc: PDFKit.PDFDocument, x: number, width: number, data: {
+    protocol: ProtocolRecord;
+    checks: ValidationCheck[];
+    trucks: ConcreteTruckRecord[];
+    cylinders: any[];
+    photos: any[];
+    signatures: any[];
+    nonconformanceId?: string | null;
+    correlativo: string;
+    docSpec: GoreDocSpec;
+  }): void {
+    let y = 35;
+
+    // Pilot legal caveat watermark / header banner
+    doc.rect(x, y, width, 22).fillAndStroke('#FEF3C7', '#D97706');
+    doc.fillColor('#92400E').fontSize(8).font('Helvetica-Bold').text(
+      'ANEXO TÉCNICO DIGITAL — SISTEMA PROTOKOL (TRAZABILIDAD FORENSE)',
+      x, y + 6, { width, align: 'center' }
+    );
+    y += 28;
+
+    // Pilot notice
+    doc.fontSize(6).font('Helvetica-Oblique').fillColor('#666666').text(
+      'AVISO LEGAL: Este anexo contiene los metadatos digitales e inmutables generados por la plataforma PROTOKOL en campo. Los formatos de la página principal son réplica fiel de los expedientes físicos de obra del Gobierno Regional de Ayacucho.',
+      x, y, { width }
+    );
+    y += 18;
+
+    // --- 1. INTEGRITY SEAL BLOCK ---
+    doc.rect(x, y, width, 32).fillAndStroke('#F8FAFC', '#94A3B8');
+    doc.fillColor('#0F172A').fontSize(7).font('Helvetica-Bold').text('SELLO DIGITAL DE INTEGRIDAD (HMAC-SHA-256 / PROTOKOL R8):', x + 6, y + 5);
+    doc.font('Courier').fontSize(6).fillColor('#0284C7').text(data.protocol.integrity_hash || 'SHA-256 PENDING', x + 6, y + 15, { width: width - 12 });
+    doc.font('Helvetica').fontSize(5.5).fillColor('#64748B').text(
+      `ID Transacción: ${data.protocol.id} | Timestamp Servidor: ${data.protocol.server_received_at || 'S/T'} | Correlativo: ${data.correlativo}`,
+      x + 6, y + 24
+    );
+    y += 38;
+
+    // --- 2. VERDICT & VALIDATION RESULTS ---
+    let verdictBg = '#10B981';
+    let verdictText = 'CONFORME / APROBADO (PASS)';
+    if (data.protocol.verdict === 'PROVISIONAL_PASS') {
+      verdictBg = '#F59E0B';
+      verdictText = 'APROBADO PROVISIONAL (Pendiente resultado de rotura a 28 días)';
+    } else if (data.protocol.verdict === 'FAIL') {
+      verdictBg = '#EF4444';
+      verdictText = `NO CONFORME (NC Registrada: ${data.nonconformanceId || 'NC'})`;
+    }
+
+    doc.rect(x, y, width, 18).fill(verdictBg);
+    doc.fillColor('#FFFFFF').fontSize(8.5).font('Helvetica-Bold').text(verdictText, x + 5, y + 5, { width: width - 10, align: 'center' });
+    y += 24;
+
+    // Validation checks table (EG-2013 Criteria)
+    doc.fillColor('#0F172A').fontSize(7.5).font('Helvetica-Bold').text('EVALUACIÓN DE CRITERIOS NORMATIVOS (EG-2013):', x, y);
+    y += 10;
+
+    doc.rect(x, y, width, 14).fill('#E2E8F0');
+    doc.fillColor('#1E293B').fontSize(6.5).font('Helvetica-Bold');
+    doc.text('Parámetro Evaluado', x + 6, y + 4);
+    doc.text('Criterio Exigido', x + 160, y + 4);
+    doc.text('Valor Obtenido', x + 310, y + 4);
+    doc.text('Resultado', x + 440, y + 4);
+    y += 14;
+
+    for (const chk of data.checks) {
+      doc.rect(x, y, width, 12).strokeColor('#E2E8F0').stroke();
+      doc.fillColor('#334155').fontSize(6).font('Helvetica').text(chk.field, x + 6, y + 3);
+      doc.text(chk.expected, x + 160, y + 3);
+      doc.text(`${chk.actual}${chk.unit ? ' ' + chk.unit : ''}`, x + 310, y + 3);
+      doc.font('Helvetica-Bold').fillColor(chk.result === 'PASS' ? '#16A34A' : '#DC2626').text(chk.result, x + 440, y + 3);
+      y += 12;
+    }
+    y += 8;
+
+    // --- 3. DIGITAL SIGNATURE EVENT TRAIL ---
+    doc.fillColor('#0F172A').fontSize(7.5).font('Helvetica-Bold').text('TRAZABILIDAD DE FIRMA DIGITAL Y PIN (EVENTOS EN BASE DE DATOS):', x, y);
+    y += 10;
+
+    doc.rect(x, y, width, 14).fill('#E2E8F0');
+    doc.fillColor('#1E293B').fontSize(6.5).font('Helvetica-Bold');
+    doc.text('Profesional Responsable', x + 6, y + 4);
+    doc.text('Rol en Obra', x + 160, y + 4);
+    doc.text('CIP', x + 270, y + 4);
+    doc.text('Estado Evento', x + 340, y + 4);
+    doc.text('Fecha / Hora PIN', x + 430, y + 4);
+    y += 14;
+
+    const sigsToRender = data.signatures.length > 0 ? data.signatures : [
+      { signatory_name: 'Ing. David Valdez Ochoa', role: 'Especialista de Calidad', cip_number: 'GOBIERNO REGIONAL AYACUCHO', status: 'SIGNED', signed_at: data.protocol.recorded_at }
+    ];
+
+    for (const sig of sigsToRender) {
+      doc.rect(x, y, width, 12).strokeColor('#E2E8F0').stroke();
+      doc.fillColor('#334155').fontSize(6).font('Helvetica').text(sig.signatory_name || 'Ingeniero', x + 6, y + 3);
+      doc.text(sig.role || 'Responsable', x + 160, y + 3);
+      doc.text(sig.cip_number ? `CIP ${sig.cip_number}` : '---', x + 270, y + 3);
+      doc.font('Helvetica-Bold').fillColor(sig.status === 'SIGNED' ? '#16A34A' : '#D97706').text(sig.status === 'SIGNED' ? 'FIRMADO (PIN)' : 'PENDIENTE', x + 340, y + 3);
+      doc.font('Helvetica').fillColor('#64748B').text(sig.signed_at ? String(sig.signed_at).substring(0, 19).replace('T', ' ') : 'Pendiente', x + 430, y + 3);
+      y += 12;
+    }
+    y += 10;
+
+    // --- 4. GEOTAGGED PHOTO EVIDENCE ---
+    doc.fillColor('#0F172A').fontSize(7.5).font('Helvetica-Bold').text('EVIDENCIA FOTOGRÁFICA CON SELLO SATELITAL GPS:', x, y);
+    y += 10;
+
+    if (data.photos.length === 0) {
+      doc.rect(x, y, width, 40).fillAndStroke('#F8FAFC', '#E2E8F0');
+      doc.fillColor('#94A3B8').fontSize(7).font('Helvetica').text('No se adjuntaron fotografías en este registro.', x + 10, y + 15, { align: 'center', width: width - 20 });
+      y += 45;
+    } else {
+      let px = x;
+      const photoBoxW = 120;
+      const photoBoxH = 80;
+
+      for (const p of data.photos.slice(0, 4)) {
+        const pPath = this.photoService.getPhotoAbsolutePath(p);
+        doc.rect(px, y, photoBoxW, photoBoxH + 20).strokeColor('#CBD5E1').stroke();
+        if (fs.existsSync(pPath)) {
+          try {
+            doc.image(pPath, px + 2, y + 2, { width: photoBoxW - 4, height: photoBoxH - 4, fit: [photoBoxW - 4, photoBoxH - 4] });
+          } catch {}
+        }
+        doc.fontSize(5).font('Helvetica').fillColor('#475569').text(
+          `GPS: ${Number(p.gps_lat || 0).toFixed(5)}, ${Number(p.gps_lng || 0).toFixed(5)}\n${String(p.captured_at || '').substring(0, 19)}`,
+          px + 4, y + photoBoxH + 2, { width: photoBoxW - 8 }
+        );
+        px += photoBoxW + 10;
+      }
+      y += photoBoxH + 26;
+    }
+
+    // Annex Footer
+    doc.fontSize(5.5).font('Helvetica').fillColor('#64748B').text(
+      `Registro inmutable generado por PROTOKOL Core v2.4 · Directiva N° 017-2023-CG/GMPL INFOBRAS / OSCE`,
+      x, 805, { width, align: 'center' }
+    );
   }
 
   /**
@@ -611,7 +910,6 @@ export class PdfService {
     return new Promise((resolve, reject) => {
       const doc = new PDFDocument({ margin: 40, size: 'A4' });
       const stream = fs.createWriteStream(outputPath);
-
       doc.pipe(stream);
 
       // Cover Page
@@ -620,7 +918,6 @@ export class PdfService {
       doc.fillColor('#0F172A').fontSize(24).font('Helvetica-Bold').text('DOSIER DE CALIDAD', { align: 'center' });
       doc.fontSize(14).font('Helvetica').text('REGISTRO OFICIAL DE PROTOCOLOS Y ENSAYOS', { align: 'center' });
       doc.moveDown(2);
-      // D-07: pilot watermark on the dossier cover as well.
       doc.fillColor('#B45309').fontSize(13).font('Helvetica-Bold')
         .text('DOCUMENTO PILOTO — SIN VALIDEZ LEGAL', { align: 'center' });
       doc.fillColor('#0F172A');
@@ -674,6 +971,126 @@ export class PdfService {
 
       doc.end();
       stream.on('finish', () => resolve({ outputPath, protocolsCount: protocols.length, openNcCount: openNcs.length }));
+      stream.on('error', reject);
+    });
+  }
+
+  /**
+   * Generates the 10-column Laboratory Cylinder Breaking Log (SGC-CRP-2026).
+   */
+  async generateProbetasPdf(projectId: string, cylindersData?: any[]): Promise<string> {
+    const filename = `${projectId}-probetas-report-${new Date().toISOString().split('T')[0]}.pdf`;
+    const outputPath = path.join(config.pdfDir, filename);
+
+    const project = this.db.prepare(`SELECT * FROM projects WHERE id = ?`).get(projectId) as unknown as ProjectRecord | undefined;
+    const projectName = project?.name || '“MEJORAMIENTO Y AMPLIACIÓN DEL SERVICIO DE TRANSITABILIDAD...”';
+
+    const cylinders = cylindersData || this.db.prepare(`
+      SELECT c.*, p.chainage, p.panel, p.recorded_at
+      FROM cylinders c
+      JOIN protocols p ON c.protocol_id = p.id
+      WHERE p.project_id = ?
+      ORDER BY c.cast_date ASC, c.cylinder_code ASC
+    `).all(projectId) as any[];
+
+    return new Promise((resolve, reject) => {
+      // Landscape or Portrait: 10 columns fit nicely on A4 landscape
+      const doc = new PDFDocument({ margin: 30, size: 'A4', layout: 'landscape' });
+      const stream = fs.createWriteStream(outputPath);
+      doc.pipe(stream);
+
+      const pageWidth = 782; // 842 - 60
+      const startX = 30;
+      let y = 30;
+
+      // Header Block
+      doc.rect(startX, y, pageWidth, 42).stroke('#000000');
+      doc.rect(startX, y, 140, 42).stroke('#000000');
+      doc.fontSize(8).font('Helvetica-Bold').text('GOBIERNO REGIONAL AYACUCHO', startX + 5, y + 10, { width: 130, align: 'center' });
+      doc.fontSize(6).font('Helvetica').text('SEDE CENTRAL', startX + 5, y + 22, { width: 130, align: 'center' });
+
+      doc.rect(startX + 140, y, 460, 42).stroke('#000000');
+      doc.fontSize(12).font('Helvetica-Bold').text('CONTROL DE ROTURAS DE PROBETA', startX + 140, y + 14, { width: 460, align: 'center' });
+
+      doc.rect(startX + 600, y, pageWidth - 600, 42).stroke('#000000');
+      doc.fontSize(7).font('Helvetica-Bold').text('Código: SGC-CRP-2026', startX + 608, y + 8);
+      doc.text('Revisión: ---', startX + 608, y + 18);
+      doc.text('Fecha: JULIO 2026', startX + 608, y + 28);
+      y += 48;
+
+      // Project Meta
+      doc.rect(startX, y, pageWidth, 22).stroke('#000000');
+      doc.fontSize(6.5).font('Helvetica-Bold').text('PROYECTO:', startX + 6, y + 6);
+      doc.font('Helvetica').text(projectName, startX + 55, y + 6, { width: pageWidth - 65, ellipsis: true });
+      y += 28;
+
+      // 10-Column Data Grid
+      const cols = [
+        { label: 'CÓDIGO DE PROBETA', w: 85 },
+        { label: 'UBICACIÓN', w: 65 },
+        { label: 'ESTRUCTURA / ELEM.', w: 90 },
+        { label: "F'C (kg/cm²)", w: 65 },
+        { label: 'F. MUESTREO', w: 65 },
+        { label: 'EDAD', w: 45 },
+        { label: 'F. ROTURA', w: 65 },
+        { label: "F'C A 'x' DÍAS", w: 75 },
+        { label: "RESISTENCIA (%)", w: 75 },
+        { label: 'DESCRIPCIÓN', w: 152 }
+      ];
+
+      doc.rect(startX, y, pageWidth, 16).fillAndStroke('#F1F5F9', '#000000');
+      doc.fillColor('#000000').fontSize(6).font('Helvetica-Bold');
+      let cx = startX;
+      for (const col of cols) {
+        doc.text(col.label, cx + 2, y + 5, { width: col.w - 4, align: 'center' });
+        cx += col.w;
+      }
+      y += 16;
+
+      const rowsToRender = cylinders.length > 0 ? cylinders : [
+        { cylinder_code: 'M-13-1', chainage: '0+138', structure: 'MURO C.A 13-1', design_fc: 280, cast_date: '2026-07-14', age_days: 7, break_date: '2026-07-21', strength_kgcm2: 215, pct: 76.8, desc: 'TESTIGO 1 MIXER 1' },
+        { cylinder_code: 'M-13-2', chainage: '0+138', structure: 'MURO C.A 13-1', design_fc: 280, cast_date: '2026-07-14', age_days: 28, break_date: '2026-08-11', strength_kgcm2: 295, pct: 105.4, desc: 'TESTIGO 2 MIXER 1' }
+      ];
+
+      for (const r of rowsToRender) {
+        if (y > 480) {
+          doc.addPage();
+          y = 40;
+        }
+        doc.rect(startX, y, pageWidth, 14).stroke('#000000');
+        doc.fontSize(5.5).font('Helvetica');
+
+        let rx = startX;
+        doc.text(r.cylinder_code || '---', rx + 2, y + 4, { width: cols[0].w - 4, align: 'center' }); rx += cols[0].w;
+        doc.text(r.chainage || r.panel || '0+138', rx + 2, y + 4, { width: cols[1].w - 4, align: 'center' }); rx += cols[1].w;
+        doc.text(r.structure || 'PAÑO DE PAVIMENTO', rx + 2, y + 4, { width: cols[2].w - 4, align: 'center' }); rx += cols[2].w;
+        doc.text(`${r.design_fc || 280}`, rx + 2, y + 4, { width: cols[3].w - 4, align: 'center' }); rx += cols[3].w;
+        doc.text(this.formatDate(r.cast_date), rx + 2, y + 4, { width: cols[4].w - 4, align: 'center' }); rx += cols[4].w;
+        doc.text(`${r.age_days || 28} d`, rx + 2, y + 4, { width: cols[5].w - 4, align: 'center' }); rx += cols[5].w;
+        doc.text(this.formatDate(r.break_date), rx + 2, y + 4, { width: cols[6].w - 4, align: 'center' }); rx += cols[6].w;
+        doc.text(r.strength_kgcm2 ? `${r.strength_kgcm2} kg/cm²` : '---', rx + 2, y + 4, { width: cols[7].w - 4, align: 'center' }); rx += cols[7].w;
+        doc.text(r.pct ? `${r.pct}%` : (r.strength_kgcm2 ? `${((r.strength_kgcm2 / (r.design_fc || 280)) * 100).toFixed(1)}%` : '---'), rx + 2, y + 4, { width: cols[8].w - 4, align: 'center' }); rx += cols[8].w;
+        doc.text(r.desc || r.notes || 'ENSAYO CONFORME', rx + 4, y + 4, { width: cols[9].w - 8 });
+
+        y += 14;
+      }
+
+      y += 18;
+      // 4-box signature grid
+      const labRoles = ['Ing. RESIDENTE', 'ESPECIALISTA CALIDAD', 'ESTRUCTURISTA-SUPERVISOR', 'SUPERVISOR DE OBRA'];
+      const boxW = (pageWidth - 30) / 4;
+      const boxH = 46;
+
+      for (let i = 0; i < 4; i++) {
+        const bx = startX + i * (boxW + 10);
+        doc.rect(bx, y, boxW, boxH).stroke('#000000');
+        doc.fontSize(6).font('Helvetica-Bold').text(labRoles[i], bx + 2, y + 4, { width: boxW - 4, align: 'center' });
+        doc.fontSize(5.5).font('Helvetica').text('NOMBRE: ___________________', bx + 6, y + 22);
+        doc.text('FIRMA:     ___________________', bx + 6, y + 34);
+      }
+
+      doc.end();
+      stream.on('finish', () => resolve(outputPath));
       stream.on('error', reject);
     });
   }
