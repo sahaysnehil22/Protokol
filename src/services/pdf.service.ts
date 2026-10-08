@@ -316,7 +316,7 @@ export class PdfService {
       // =========================================================================
 
       if (params.protocol.activity === 'SURVEY') {
-        y = this.renderSurveyBody(doc, startX, y, pageWidth, protocolChecks, docSpec);
+        y = this.renderSurveyBody(doc, startX, y, pageWidth, protocolChecks, docSpec, params.protocol);
       } else if (params.protocol.activity === 'CONCRETE') {
         y = this.renderConcreteBody(doc, startX, y, pageWidth, protocolChecks, trucks, docSpec, params.protocol);
       } else if (params.protocol.activity === 'STEEL') {
@@ -367,7 +367,7 @@ export class PdfService {
   /**
    * Renders Topografía specific checklist, field data, and coordinates grid.
    */
-  private renderSurveyBody(doc: PDFKit.PDFDocument, x: number, y: number, width: number, protocolChecks: any[], docSpec: GoreDocSpec): number {
+  private renderSurveyBody(doc: PDFKit.PDFDocument, x: number, y: number, width: number, protocolChecks: any[], docSpec: GoreDocSpec, protocol?: ProtocolRecord): number {
     doc.fillColor('#000000').strokeColor('#000000').lineWidth(0.75);
 
     // Header table for Survey: ITEM | LISTA DE VERIFICACIÓN | NA | INSPECCIÓN (C/NC) | OBSERVACIONES | V.B
@@ -411,8 +411,13 @@ export class PdfService {
     for (const item of defaultSurveyItems) {
       if (item.section !== currentSection) {
         currentSection = item.section;
+        // Verbatim from original: section number in ITEM column, name spanning description
+        const secNum = item.section.split(' ')[0];
+        const secName = item.section.substring(secNum.length).trim();
         doc.rect(x, y, width, 12).fillAndStroke('#F8FAFC', '#000000');
-        doc.fillColor('#000000').fontSize(6).font('Helvetica-Bold').text(currentSection, x + 5, y + 3);
+        doc.fillColor('#000000').fontSize(6).font('Helvetica-Bold');
+        doc.text(secNum, x + 4, y + 3);
+        doc.text(secName, x + itemW + 4, y + 3);
         y += 12;
       }
 
@@ -445,32 +450,35 @@ export class PdfService {
     );
     y += 10;
 
-    // DATOS DE CAMPO TABLE
-    doc.rect(x, y, width, 56).stroke();
+    // DATOS DE CAMPO TABLE (verbatim structure from PRO-TOPOGRAFIA-2026)
+    const meas = (key: string) => this.getMeasurement(protocol as ProtocolRecord, key);
+    const equipVal = meas('survey_equipment') || '';
+    const certVal = meas('survey_cert') || '';
+    const calibVal = meas('survey_calib') || 'SI';
+    const mark = (cond: boolean) => (cond ? '[X]' : '[ ]');
+
+    doc.rect(x, y, width, 62).stroke();
     doc.fontSize(6).font('Helvetica-Bold').text('DATOS DE CAMPO:', x + 5, y + 4);
 
-    // Equipment 1 & 2
+    // Equipment from app measurements (original: EQUIPO 1 / EQUIPO 2 with MARCA/MODELO/SERIE)
     doc.font('Helvetica-Bold').text('EQUIPO 1:', x + 5, y + 15);
-    doc.font('Helvetica').text('ESTACIÓN TOTAL / NIVEL ÓPTICO', x + 50, y + 15);
+    doc.font('Helvetica').text(equipVal, x + 55, y + 15, { width: 140, ellipsis: true });
     doc.font('Helvetica-Bold').text('CALIBRACIÓN:', x + 200, y + 15);
-    doc.font('Helvetica').text('[X] SI   [ ] NO', x + 260, y + 15);
+    doc.font('Helvetica').text(`${mark(calibVal === 'SI')} SI   ${mark(calibVal === 'NO')} NO`, x + 265, y + 15);
 
-    doc.font('Helvetica-Bold').text('EQUIPO 2:', x + 5, y + 27);
-    doc.font('Helvetica').text('PRISMA / MIRA TOPOGRÁFICA', x + 50, y + 27);
-    doc.font('Helvetica-Bold').text('N° CERTIFICADO:', x + 200, y + 27);
-    doc.font('Helvetica').text('CERT-TOP-2026-081', x + 270, y + 27);
+    doc.font('Helvetica-Bold').text('N° DE CERTIFICADO:', x + 5, y + 27);
+    doc.font('Helvetica').text(certVal, x + 95, y + 27, { width: 150 });
 
-    // Coordinates grid snippet
+    // Coordinates grid (blank — control points are recorded on the physical format)
     doc.font('Helvetica-Bold').text('COORDENADAS DE CONTROL:', x + 350, y + 15);
-    doc.font('Helvetica').fontSize(5.5).text('BM-01: E=584210.45, N=8541290.12, Z=2745.320', x + 350, y + 27);
-    doc.text('PA-02: E=584250.88, N=8541315.60, Z=2745.410', x + 350, y + 37);
+    doc.font('Helvetica').fontSize(5.5).text('PUNTO: _______  E: ____________  N: ____________  Z: __________', x + 350, y + 27);
+    doc.text('PUNTO: _______  E: ____________  N: ____________  Z: __________', x + 350, y + 37);
 
     doc.font('Helvetica-Bold').text('- SE ADJUNTA PLANO / SKETCH:', x + 5, y + 42);
     doc.font('Helvetica').text('[X] SI   [ ] NO', x + 130, y + 42);
-    doc.font('Helvetica-Bold').text('- PUNTO REF.:', x + 200, y + 42);
-    doc.font('Helvetica').text('BM: BENCH MARK   PA: PUNTOS AUXILIARES   PC: PUNTO DE CONTROL', x + 260, y + 42);
+    doc.font('Helvetica-Bold').fontSize(5.5).text('- PUNTO REF.: BM: BENCH MARK   PA: PUNTOS AUXILIARES   PC: PUNTO DE CONTROL', x + 5, y + 50, { width: 320 });
 
-    y += 62;
+    y += 68;
     return y;
   }
 
