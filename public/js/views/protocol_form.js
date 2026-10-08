@@ -459,6 +459,70 @@ export async function renderProtocolFormView(container, activity, session, onCom
             </div>
           </div>
 
+          <!-- Tipo de concreto (from original GDC-PCC-2026 §2) -->
+          <div style="margin-bottom: 18px; background: #F8FAFC; border: 1px solid var(--color-border); border-radius: 8px; padding: 12px;">
+            <div style="font-size: 12px; font-weight: 800; color: #0284C7; margin-bottom: 10px;">
+              2. TIPO DE CONCRETO Y COLOCACIÓN
+            </div>
+            <div style="font-size: 11px; color: var(--color-text-muted); margin-bottom: 10px;">
+              Marcar con un aspa dentro del cuadro según corresponda.
+            </div>
+            <div class="form-group" style="margin-bottom: 10px;">
+              <label class="form-label">F´c diseño</label>
+              <select id="input-conc-fc" class="form-input">
+                <option value="280" selected>280 KG/CM2</option>
+                <option value="210">210 KG/CM2</option>
+                <option value="175">175 KG/CM2</option>
+              </select>
+            </div>
+            <div class="form-group" style="margin-bottom: 10px;">
+              <label class="form-label">PROCEDENCIA</label>
+              <div style="display: flex; gap: 8px;">
+                <label style="flex: 1; display: flex; align-items: center; gap: 6px; font-size: 13px; background: #fff; border: 1px solid var(--color-border); border-radius: 6px; padding: 8px;">
+                  <input type="radio" name="conc-proc" value="hecho_en_obra" /> Hecho en obra
+                </label>
+                <label style="flex: 1; display: flex; align-items: center; gap: 6px; font-size: 13px; background: #fff; border: 1px solid var(--color-border); border-radius: 6px; padding: 8px;">
+                  <input type="radio" name="conc-proc" value="premezclado" /> Premezclado
+                </label>
+              </div>
+            </div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+              <div class="form-group" style="margin-bottom: 0;">
+                <label class="form-label">COLOCACIÓN</label>
+                <div style="display: flex; align-items: center; gap: 6px; font-size: 13px; background: #fff; border: 1px solid var(--color-border); border-radius: 6px; padding: 8px;">
+                  <input type="checkbox" id="input-conc-coloc" /> Directo
+                </div>
+              </div>
+              <div class="form-group" style="margin-bottom: 0;">
+                <label class="form-label">ACABADO</label>
+                <select id="input-conc-acabado" class="form-input">
+                  <option value="">—</option>
+                  <option value="caravista">Caravista</option>
+                  <option value="otro">Otro</option>
+                </select>
+              </div>
+            </div>
+          </div>
+
+          <!-- Cubicación (from original GDC-PCC-2026) -->
+          <div style="margin-bottom: 18px;">
+            <div style="font-size: 12px; font-weight: 800; color: #0284C7; margin-bottom: 8px;">
+              CUBICACIÓN
+            </div>
+            <div id="cubicacion-container">
+              ${[0,1,2,3,4].map(i => `
+                <div class="cubic-row" data-idx="${i}" style="display: grid; grid-template-columns: 2fr 1fr 1fr 1fr 1fr; gap: 6px; margin-bottom: 6px;">
+                  <input type="text" class="form-input cubic-elem" placeholder="Elemento${i===0?' (ej. PAÑO TIPO 1)':''}" style="font-size: 12px;" />
+                  <input type="number" step="any" class="form-input cubic-veces" placeholder="N° veces" style="font-size: 12px;" />
+                  <input type="number" step="any" class="form-input cubic-long" placeholder="Long" style="font-size: 12px;" />
+                  <input type="number" step="any" class="form-input cubic-base" placeholder="Base" style="font-size: 12px;" />
+                  <input type="number" step="any" class="form-input cubic-alt" placeholder="Altura" style="font-size: 12px;" />
+                </div>
+              `).join('')}
+            </div>
+            <div style="font-size: 11px; color: var(--color-text-muted);">Parcial = N° veces × Long × Base × Altura. El total se calcula al generar el protocolo.</div>
+          </div>
+
           <!-- Mixer Trucks Dynamic Section -->
           <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 20px; margin-bottom: 10px;">
             <label class="form-label" style="color: #0284C7; margin-bottom: 0;">
@@ -479,12 +543,25 @@ export async function renderProtocolFormView(container, activity, session, onCom
 
       if (activity === 'SURVEY') {
         const elevVal = formData.measurements.elevation_deviation !== undefined ? formData.measurements.elevation_deviation : '0.5';
+        const equipVal = formData.measurements.survey_equipment || '';
+        const certVal = formData.measurements.survey_cert || '';
         return `
           ${advisoryContainerHtml}
 
           <h3 style="font-size: 17px; font-weight: 800; margin-bottom: 16px; color: #0F172A;">
             ${t('survey.step_title')}
           </h3>
+
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+            <div class="form-group">
+              <label class="form-label">Equipo utilizado</label>
+              <input type="text" id="input-survey-equip" class="form-input" value="${equipVal}" placeholder="Estación total / Nivel óptico" />
+            </div>
+            <div class="form-group">
+              <label class="form-label">N° Certificado calibración</label>
+              <input type="text" id="input-survey-cert" class="form-input" value="${certVal}" placeholder="CERT-TOP-2026-___" />
+            </div>
+          </div>
 
           <div class="form-group">
             <label class="form-label">${t('survey.elevation')}</label>
@@ -725,13 +802,15 @@ export async function renderProtocolFormView(container, activity, session, onCom
     }
 
     if (step === 3) {
+      const evidenceOptional = activity === 'SURVEY';
       return `
         <h3 style="font-size: 17px; font-weight: 800; margin-bottom: 8px; color: #0F172A;">
-          ${t('step3.title')}
+          ${t('step3.title')} ${evidenceOptional ? '<span style="font-size: 11px; font-weight: 700; color: #64748B; background: #F1F5F9; padding: 2px 8px; border-radius: 4px; vertical-align: middle;">OPCIONAL</span>' : ''}
         </h3>
         <p style="font-size: 12px; color: var(--color-text-secondary); margin-bottom: 16px;">
-          ${t('step3.hint')}
+          ${evidenceOptional ? 'La evidencia fotográfica es opcional para este protocolo. Puede continuar sin adjuntar fotos.' : t('step3.hint')}
         </p>
+        <div id="step3-photo-error" style="display: none; background: #FEF2F2; border: 1px solid #FECACA; border-radius: 8px; padding: 10px 12px; font-size: 12px; color: #991B1B; margin-bottom: 12px;"></div>
 
         <div style="margin-bottom: 16px;">
           <input type="file" accept="image/*" capture="environment" id="camera-input" style="display: none;" />
@@ -760,7 +839,7 @@ export async function renderProtocolFormView(container, activity, session, onCom
           ${t('step4.title')}
         </h3>
 
-        <!-- Real-Time Evaluation Summary Preview -->
+        <!-- Review Summary -->
         ${hasNC ? `
           <div style="background: #FEF2F2; border: 1.5px solid #FECACA; border-radius: 8px; padding: 14px; margin-bottom: 18px;">
             <div style="display: flex; align-items: flex-start; gap: 8px;">
@@ -784,64 +863,26 @@ export async function renderProtocolFormView(container, activity, session, onCom
                   ${t('form.pre_verdict_pass')}
                 </div>
                 <div style="font-size: 12px; color: #047857; margin-top: 2px;">
-                  ${activity === 'CONCRETE' ? 'Estado proyectado: APROBACIÓN PROVISIONAL (pendiente resultados de probetas a 7/28 días).' : 'Estado proyectado: CONFORME / APROBADO.'}
+                  Toda la información requerida está completa. El protocolo se generará con el formato original.
                 </div>
               </div>
             </div>
           </div>
         `}
 
+        <!-- Quality Specialist (fills the protocol) -->
         <div style="background: #F8FAFC; border: 1px solid var(--color-border); border-radius: 8px; padding: 14px; margin-bottom: 18px;">
           <div style="font-size: 11px; font-weight: 800; color: #0284C7; text-transform: uppercase;">
-            ${t('step4.tech_label')}
+            Especialista de Calidad (registra el protocolo)
           </div>
           <div style="font-size: 16px; font-weight: 800; color: #0F172A; margin-top: 2px;">
             ${session.name}
           </div>
           <div style="font-size: 12px; color: var(--color-text-secondary); margin-top: 1px;">
-            ${session.role} • Token: ${session.device_token.substring(0, 16)}...
+            ${session.role}
           </div>
-        </div>
-
-        <!-- 5-Box Official PPI Signature Grid (§3.7 / F4, F6, F8, F9) -->
-        <div style="margin-bottom: 18px;">
-          <div style="font-size: 12px; font-weight: 800; color: #0F172A; text-transform: uppercase; margin-bottom: 8px;">
-            📋 Cuadro de 5 Firmas de Aprobación PPI (§3.7)
-          </div>
-          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 8px;">
-            <div style="border: 1.5px solid #0284C7; background: #F0F9FF; border-radius: 6px; padding: 8px; font-size: 11px;">
-              <div style="font-weight: 800; color: #0369A1;">1. Calidad (Ejecutor)</div>
-              <div style="color: #0F172A; font-weight: 600; margin-top: 2px;">Ing. David Valdez Ochoa</div>
-              <div style="color: #0284C7; font-size: 10px;">CIP Reg. Obra</div>
-              <div style="margin-top: 6px; font-weight: 700; color: #059669; font-size: 10px;">✓ FIRMA INICIAL</div>
-            </div>
-            <div style="border: 1px solid var(--color-border); background: #FFFFFF; border-radius: 6px; padding: 8px; font-size: 11px;">
-              <div style="font-weight: 800; color: #475569;">2. Calidad (Supervisión)</div>
-              <div style="color: #0F172A; font-weight: 600; margin-top: 2px;">Ing. Cristian Torres S.</div>
-              <div style="color: #64748B; font-size: 10px;">CIP: 260873</div>
-              <div style="margin-top: 6px; color: #D97706; font-size: 10px; font-weight: 600;">⏳ Sello PENDIENTE</div>
-            </div>
-            <div style="border: 1px solid var(--color-border); background: #FFFFFF; border-radius: 6px; padding: 8px; font-size: 11px;">
-              <div style="font-weight: 800; color: #475569;">3. Supervisor de Obra</div>
-              <div style="color: #0F172A; font-weight: 600; margin-top: 2px;">Ing. Teodoro Huamancusi</div>
-              <div style="color: #64748B; font-size: 10px;">CIP: 53548</div>
-              <div style="margin-top: 6px; color: #D97706; font-size: 10px; font-weight: 600;">⏳ Sello PENDIENTE</div>
-            </div>
-            <div style="border: 1px solid var(--color-border); background: #FFFFFF; border-radius: 6px; padding: 8px; font-size: 11px;">
-              <div style="font-weight: 800; color: #475569;">4. Residente de Obra</div>
-              <div style="color: #0F172A; font-weight: 600; margin-top: 2px;">Ing. Edison Cuadros G.</div>
-              <div style="color: #64748B; font-size: 10px;">CIP: 302775</div>
-              <div style="margin-top: 6px; color: #D97706; font-size: 10px; font-weight: 600;">⏳ Sello PENDIENTE</div>
-            </div>
-            <div style="border: 1px solid var(--color-border); background: #FFFFFF; border-radius: 6px; padding: 8px; font-size: 11px;">
-              <div style="font-weight: 800; color: #475569;">5. Estructuras (Sup.)</div>
-              <div style="color: #0F172A; font-weight: 600; margin-top: 2px;">Ing. Roly Conocachi H.</div>
-              <div style="color: #64748B; font-size: 10px;">CIP: 76843</div>
-              <div style="margin-top: 6px; color: #D97706; font-size: 10px; font-weight: 600;">⏳ Sello PENDIENTE</div>
-            </div>
-          </div>
-          <div style="font-size: 10px; color: #64748B; margin-top: 6px;">
-            🔒 Trazabilidad criptográfica garantizada mediante sello digital (<code style="font-size: 10px;">stamp_key</code>) y PIN de colegiatura.
+          <div style="font-size: 11px; color: var(--color-text-muted); margin-top: 6px;">
+            Los demás especialistas revisan y verifican la información; la aprobación y firmas físicas siguen el proceso real de obra.
           </div>
         </div>
 
@@ -850,8 +891,8 @@ export async function renderProtocolFormView(container, activity, session, onCom
           <textarea id="input-notes" class="form-input" rows="3" placeholder="Observaciones de campo...">${formData.notes}</textarea>
         </div>
 
-        <div style="background: #FEF3C7; border: 1px solid #FDE68A; border-radius: 8px; padding: 12px; font-size: 12px; color: #92400E;">
-          ⚖️ ${t('step4.declaration')}
+        <div style="background: #EFF6FF; border: 1px solid #BFDBFE; border-radius: 8px; padding: 12px; font-size: 12px; color: #1E40AF;">
+          📄 Al generar, PROTOKOL produce el protocolo completado con el formato original del documento (campos, checklist, observaciones y evidencia).
         </div>
       `;
     }
@@ -993,9 +1034,37 @@ export async function renderProtocolFormView(container, activity, session, onCom
           design_fc: t.design_fc,
           notes: t.notes
         }));
+
+        // Protocol-specific fields from original GDC-PCC-2026 §2
+        const fcEl = container.querySelector('#input-conc-fc');
+        if (fcEl) formData.measurements.design_fc = fcEl.value;
+        const procEl = container.querySelector('input[name="conc-proc"]:checked');
+        formData.measurements.procedencia = procEl ? procEl.value : '';
+        const colocEl = container.querySelector('#input-conc-coloc');
+        formData.measurements.colocacion = colocEl && colocEl.checked ? 'directo' : '';
+        const acabEl = container.querySelector('#input-conc-acabado');
+        if (acabEl) formData.measurements.acabado = acabEl.value;
+
+        // Cubicación rows
+        const cubRows = [];
+        container.querySelectorAll('.cubic-row').forEach(row => {
+          const elem = row.querySelector('.cubic-elem')?.value.trim() || '';
+          const veces = row.querySelector('.cubic-veces')?.value.trim() || '';
+          const long = row.querySelector('.cubic-long')?.value.trim() || '';
+          const base = row.querySelector('.cubic-base')?.value.trim() || '';
+          const alt = row.querySelector('.cubic-alt')?.value.trim() || '';
+          if (elem || veces || long || base || alt) {
+            cubRows.push({ elemento: elem, veces, long, base, altura: alt });
+          }
+        });
+        formData.measurements.cubicacion = cubRows;
       } else if (activity === 'SURVEY') {
         const el = container.querySelector('#input-survey-elev');
         if (el) formData.measurements.elevation_deviation = parseFloat(el.value);
+        const eqEl = container.querySelector('#input-survey-equip');
+        if (eqEl) formData.measurements.survey_equipment = eqEl.value.trim();
+        const certEl = container.querySelector('#input-survey-cert');
+        if (certEl) formData.measurements.survey_cert = certEl.value.trim();
       } else if (activity === 'COMPACTION') {
         const cp = container.querySelector('#input-comp-pct');
         const mo = container.querySelector('#input-moisture');
@@ -1126,6 +1195,16 @@ export async function renderProtocolFormView(container, activity, session, onCom
     if (nextBtn) {
       nextBtn.addEventListener('click', () => {
         syncStepData();
+
+        // Step 3 -> 4: evidence required except for SURVEY (optional per protocol)
+        if (currentStep === 3 && activity !== 'SURVEY' && formData.localPhotos.length === 0) {
+          const errEl = container.querySelector('#step3-photo-error');
+          if (errEl) {
+            errEl.innerText = 'Este protocolo requiere al menos una evidencia fotográfica. Tome o suba una foto para continuar.';
+            errEl.style.display = 'block';
+          }
+          return;
+        }
 
         // If advancing from Step 2 to Step 3, perform quality check
         if (currentStep === 2 && !acknowledgedNC) {
