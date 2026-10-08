@@ -564,6 +564,18 @@ export async function renderProtocolFormView(container, activity, session, onCom
           </div>
 
           <div class="form-group">
+            <label class="form-label">Calibración vigente</label>
+            <div style="display: flex; gap: 12px; margin-top: 6px;">
+              <label style="display: flex; align-items: center; gap: 6px; font-size: 14px;">
+                <input type="radio" name="survey-calib" value="SI" ${formData.measurements.survey_calib !== 'NO' ? 'checked' : ''} /> SI
+              </label>
+              <label style="display: flex; align-items: center; gap: 6px; font-size: 14px;">
+                <input type="radio" name="survey-calib" value="NO" ${formData.measurements.survey_calib === 'NO' ? 'checked' : ''} /> NO
+              </label>
+            </div>
+          </div>
+
+          <div class="form-group">
             <label class="form-label">${t('survey.elevation')}</label>
             <div class="input-wrapper">
               <input 
@@ -1088,6 +1100,8 @@ export async function renderProtocolFormView(container, activity, session, onCom
         if (eqEl) formData.measurements.survey_equipment = eqEl.value.trim();
         const certEl = container.querySelector('#input-survey-cert');
         if (certEl) formData.measurements.survey_cert = certEl.value.trim();
+        const calibEl = container.querySelector('input[name="survey-calib"]:checked');
+        if (calibEl) formData.measurements.survey_calib = calibEl.value;
       } else if (activity === 'COMPACTION') {
         const cp = container.querySelector('#input-comp-pct');
         const mo = container.querySelector('#input-moisture');
