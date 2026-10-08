@@ -305,10 +305,11 @@ export function createApiRouter(db: DatabaseSync): Router {
       } = req.body;
 
       // Validate required project information
-      if (!id || !name || !contract_number || !entity || !execution_mode) {
+      // (contract_number optional since 2026-10-08: removed from project setup per David/Kenny direction)
+      if (!id || !name || !entity || !execution_mode) {
         return res.status(400).json({
           error: 'VALIDATION_ERROR',
-          message: 'id, name, contract_number, entity, y execution_mode son obligatorios.'
+          message: 'id, name, entity, y execution_mode son obligatorios.'
         });
       }
 
@@ -358,7 +359,7 @@ export function createApiRouter(db: DatabaseSync): Router {
       `).run(
         id,
         name,
-        contract_number,
+        contract_number || '',
         entity,
         execution_mode,
         location || '',
