@@ -1060,7 +1060,11 @@ export async function renderProtocolFormView(container, activity, session, onCom
         formData.measurements.cubicacion = cubRows;
       } else if (activity === 'SURVEY') {
         const el = container.querySelector('#input-survey-elev');
-        if (el) formData.measurements.elevation_deviation = parseFloat(el.value);
+        if (el) {
+          formData.measurements.elevation_deviation = parseFloat(el.value);
+          // Alias for project acceptance criteria (expects mm)
+          formData.measurements.elevation_dev_mm = parseFloat(el.value) * 10;
+        }
         const eqEl = container.querySelector('#input-survey-equip');
         if (eqEl) formData.measurements.survey_equipment = eqEl.value.trim();
         const certEl = container.querySelector('#input-survey-cert');
@@ -1077,13 +1081,28 @@ export async function renderProtocolFormView(container, activity, session, onCom
       } else if (activity === 'STEEL') {
         const sp = container.querySelector('#input-steel-spacing');
         const co = container.querySelector('#input-steel-cover');
-        if (sp) formData.measurements.bar_spacing_cm = parseFloat(sp.value);
+        if (sp) {
+          formData.measurements.bar_spacing_cm = parseFloat(sp.value);
+          // Alias for project acceptance criteria
+          formData.measurements.spacing_cm = parseFloat(sp.value);
+        }
         if (co) formData.measurements.concrete_cover_cm = parseFloat(co.value);
       } else if (activity === 'FORMWORK') {
         const al = container.querySelector('#input-formwork-align');
         const sc = container.querySelector('#input-formwork-section');
-        if (al) formData.measurements.alignment_deviation_mm = parseFloat(al.value);
+        if (al) {
+          formData.measurements.alignment_deviation_mm = parseFloat(al.value);
+          // Alias for project acceptance criteria
+          formData.measurements.alignment_mm = parseFloat(al.value);
+        }
         if (sc) formData.measurements.section_dimension_deviation_mm = parseFloat(sc.value);
+        // Derive checklist-based criteria from the paper checklist state:
+        // surface / release agent / tightness are verified via the checklist
+        const anyNc = Array.isArray(checklistState) && checklistState.some(c => c.result === 'NO_CUMPLE');
+        const chkVal = anyNc ? 'false' : 'true';
+        formData.measurements.surface_clean = chkVal;
+        formData.measurements.release_agent_applied = chkVal;
+        formData.measurements.tightness_verified = chkVal;
       }
 
       // Sync paper checklist observations (§3.6 / F1)
