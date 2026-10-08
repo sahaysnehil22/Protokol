@@ -1,4 +1,4 @@
-// PROTOKOL â€” View: 4-Step Guided Protocol Wizard
+// PROTOKOL — View: 4-Step Guided Protocol Wizard
 // Supports v2.4 Dynamic Concrete Pour Architecture (1 to 20+ Ready-Mix Trucks)
 import { getDeviceLocation } from '../location.js';
 import { queueSubmission, storeLocalPhoto, getConfigItem } from '../db.js';
@@ -38,7 +38,7 @@ export async function renderProtocolFormView(container, activity, session, onCom
     // offline fallback
   }
 
-  // Load checklist templates for current activity (Â§3.6 / F1)
+  // Load checklist templates for current activity (§3.6 / F1)
   let checklistTemplates = [];
   let checklistState = [];
 
@@ -69,7 +69,7 @@ export async function renderProtocolFormView(container, activity, session, onCom
           result: 'CUMPLE',
           observation: ''
         }));
-        console.log('ðŸ“´ Using cached checklist templates (offline)');
+        console.log('📴 Using cached checklist templates (offline)');
       }
     } catch { /* no cached templates */ }
   }
@@ -80,7 +80,7 @@ export async function renderProtocolFormView(container, activity, session, onCom
       truck_number: 1,
       mixer_id: '',
       delivery_note: '',
-      supplier: 'Concreto TitÃ¡n',
+      supplier: 'Concreto Titán',
       slump: '4',
       slump_cm: '10.2',
       cylinders_cast: 4,
@@ -106,7 +106,7 @@ export async function renderProtocolFormView(container, activity, session, onCom
     formData.gps = loc;
     const gpsEl = container.querySelector('#gps-display');
     if (gpsEl) {
-      gpsEl.innerText = `${loc.lat.toFixed(6)}, ${loc.lng.toFixed(6)} (Â±${loc.accuracy}m)`;
+      gpsEl.innerText = `${loc.lat.toFixed(6)}, ${loc.lng.toFixed(6)} (±${loc.accuracy}m)`;
     }
   });
 
@@ -114,7 +114,7 @@ export async function renderProtocolFormView(container, activity, session, onCom
   function evaluateCriterion(crit, val) {
     if (!crit) return { valid: true };
     const num = typeof val === 'number' ? val : parseFloat(val);
-    if (isNaN(num)) return { valid: false, error: 'Valor invÃ¡lido' };
+    if (isNaN(num)) return { valid: false, error: 'Valor inválido' };
 
     if (crit.operator === 'BETWEEN') {
       const valid = num >= crit.min_value && num <= crit.max_value;
@@ -130,7 +130,7 @@ export async function renderProtocolFormView(container, activity, session, onCom
       return {
         valid,
         min: crit.min_value,
-        error: valid ? null : `Menor al mÃ­nimo exigido (â‰¥ ${crit.min_value} ${crit.unit || ''})`
+        error: valid ? null : `Menor al mínimo exigido (≥ ${crit.min_value} ${crit.unit || ''})`
       };
     }
     if (crit.operator === 'LTE') {
@@ -138,7 +138,7 @@ export async function renderProtocolFormView(container, activity, session, onCom
       return {
         valid,
         max: crit.max_value,
-        error: valid ? null : `Supera la tolerancia mÃ¡xima (â‰¤ ${crit.max_value} ${crit.unit || ''})`
+        error: valid ? null : `Supera la tolerancia máxima (≤ ${crit.max_value} ${crit.unit || ''})`
       };
     }
     if (crit.operator === 'EQ') {
@@ -160,39 +160,39 @@ export async function renderProtocolFormView(container, activity, session, onCom
       trucksState.forEach(t => {
         const s = parseFloat(t.slump_cm);
         if (!isNaN(s) && (s < slumpCrit.min_value || s > slumpCrit.max_value)) {
-          issues.push(`CamiÃ³n Mixer #${t.truck_number} (${t.mixer_id}): Asentamiento (slump) de ${s} cm fuera de tolerancia (${slumpCrit.min_value} - ${slumpCrit.max_value} cm)`);
+          issues.push(`Camión Mixer #${t.truck_number} (${t.mixer_id}): Asentamiento (slump) de ${s} cm fuera de tolerancia (${slumpCrit.min_value} - ${slumpCrit.max_value} cm)`);
         }
         const c = parseInt(t.cylinders_cast, 10);
         if (!isNaN(c) && c < (cylCrit.min_value || 4)) {
-          issues.push(`CamiÃ³n Mixer #${t.truck_number}: Solo ${c} probetas moldeadas (mÃ­nimo ${cylCrit.min_value || 4})`);
+          issues.push(`Camión Mixer #${t.truck_number}: Solo ${c} probetas moldeadas (mínimo ${cylCrit.min_value || 4})`);
         }
       });
     } else if (activity === 'SURVEY') {
       const dev = Math.abs(parseFloat(formData.measurements.elevation_deviation));
       const maxDev = criteriaMap['elevation_deviation']?.max_value || 1.0;
       if (!isNaN(dev) && dev > maxDev) {
-        issues.push(`DesviaciÃ³n de cota: ${formData.measurements.elevation_deviation} cm (tolerancia: â‰¤ ${maxDev} cm)`);
+        issues.push(`Desviación de cota: ${formData.measurements.elevation_deviation} cm (tolerancia: ≤ ${maxDev} cm)`);
       }
     } else if (activity === 'COMPACTION') {
       const pct = parseFloat(formData.measurements.compaction_pct);
       const minPct = criteriaMap['compaction_pct']?.min_value || 100.0;
       if (!isNaN(pct) && pct < minPct) {
-        issues.push(`Grado de compactaciÃ³n: ${pct}% (mÃ­nimo exigido: â‰¥ ${minPct}%)`);
+        issues.push(`Grado de compactación: ${pct}% (mínimo exigido: ≥ ${minPct}%)`);
       }
       const moist = Math.abs(parseFloat(formData.measurements.moisture_deviation));
       const maxMoist = criteriaMap['moisture_deviation']?.max_value || 1.5;
       if (!isNaN(moist) && moist > maxMoist) {
-        issues.push(`DesviaciÃ³n de humedad: ${formData.measurements.moisture_deviation}% (tolerancia: Â±${maxMoist}%)`);
+        issues.push(`Desviación de humedad: ${formData.measurements.moisture_deviation}% (tolerancia: ±${maxMoist}%)`);
       }
       const sub = parseFloat(formData.measurements.sub_base_thickness);
       const minSub = criteriaMap['sub_base_thickness']?.min_value || 20.0;
       if (!isNaN(sub) && sub < minSub) {
-        issues.push(`Espesor sub-base: ${sub} cm (mÃ­nimo: â‰¥ ${minSub} cm)`);
+        issues.push(`Espesor sub-base: ${sub} cm (mínimo: ≥ ${minSub} cm)`);
       }
       const base = parseFloat(formData.measurements.base_thickness);
       const minBase = criteriaMap['base_thickness']?.min_value || 25.0;
       if (!isNaN(base) && base < minBase) {
-        issues.push(`Espesor base: ${base} cm (mÃ­nimo: â‰¥ ${minBase} cm)`);
+        issues.push(`Espesor base: ${base} cm (mínimo: ≥ ${minBase} cm)`);
       }
     } else if (activity === 'STEEL') {
       const sp = parseFloat(formData.measurements.bar_spacing_cm);
@@ -203,26 +203,26 @@ export async function renderProtocolFormView(container, activity, session, onCom
       const cov = parseFloat(formData.measurements.concrete_cover_cm);
       const minCov = criteriaMap['concrete_cover_cm']?.min_value || 5.0;
       if (!isNaN(cov) && cov < minCov) {
-        issues.push(`Recubrimiento de concreto: ${cov} cm (mÃ­nimo: â‰¥ ${minCov} cm)`);
+        issues.push(`Recubrimiento de concreto: ${cov} cm (mínimo: ≥ ${minCov} cm)`);
       }
     } else if (activity === 'FORMWORK') {
       const align = parseFloat(formData.measurements.alignment_deviation_mm);
       const maxAlign = criteriaMap['alignment_deviation_mm']?.max_value || 5.0;
       if (!isNaN(align) && align > maxAlign) {
-        issues.push(`Alineamiento y verticalidad: ${align} mm (tolerancia: â‰¤ ${maxAlign} mm)`);
+        issues.push(`Alineamiento y verticalidad: ${align} mm (tolerancia: ≤ ${maxAlign} mm)`);
       }
       const sect = Math.abs(parseFloat(formData.measurements.section_dimension_deviation_mm));
       const maxSect = criteriaMap['section_dimension_deviation_mm']?.max_value || 5.0;
       if (!isNaN(sect) && sect > maxSect) {
-        issues.push(`DimensiÃ³n de secciÃ³n transversal: Â±${sect} mm (tolerancia: Â±${maxSect} mm)`);
+        issues.push(`Dimensión de sección transversal: ±${sect} mm (tolerancia: ±${maxSect} mm)`);
       }
     }
 
-    // Check checklist items for non-conformances (Â§3.6 / F1)
+    // Check checklist items for non-conformances (§3.6 / F1)
     if (Array.isArray(checklistState)) {
       checklistState.forEach((chk, i) => {
         if (chk.result === 'NO_CUMPLE') {
-          issues.push(`Ãtem ${i + 1} (${chk.item_text}): NO CUMPLE`);
+          issues.push(`Ítem ${i + 1} (${chk.item_text}): NO CUMPLE`);
         }
       });
     }
@@ -238,7 +238,7 @@ export async function renderProtocolFormView(container, activity, session, onCom
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
           <div>
             <h4 style="font-size: 13.5px; font-weight: 800; color: #0F172A; margin: 0;">
-              ðŸ“‹ Lista de Chequeo de InspecciÃ³n en Obra (Â§3.6 / F1)
+              📋 Lista de Chequeo de Inspección en Obra (§3.6 / F1)
             </h4>
             <span style="font-size: 11px; color: var(--color-text-muted);">
               Formato oficial de campo: CUMPLE / NO CUMPLE / NO APLICA
@@ -255,18 +255,18 @@ export async function renderProtocolFormView(container, activity, session, onCom
               <div style="display: flex; gap: 6px; margin-bottom: 6px;">
                 <button type="button" class="btn-chk-pill ${chk.result === 'CUMPLE' ? 'active-cumple' : ''}" data-idx="${idx}" data-val="CUMPLE"
                   style="flex: 1; padding: 6px 4px; font-size: 11px; font-weight: 800; border-radius: 6px; cursor: pointer; border: 1.5px solid ${chk.result === 'CUMPLE' ? '#16A34A' : '#CBD5E1'}; background: ${chk.result === 'CUMPLE' ? '#DCFCE7' : '#F8FAFC'}; color: ${chk.result === 'CUMPLE' ? '#15803D' : '#475569'};">
-                  âœ“ CUMPLE
+                  ✓ CUMPLE
                 </button>
                 <button type="button" class="btn-chk-pill ${chk.result === 'NO_CUMPLE' ? 'active-nocumple' : ''}" data-idx="${idx}" data-val="NO_CUMPLE"
                   style="flex: 1; padding: 6px 4px; font-size: 11px; font-weight: 800; border-radius: 6px; cursor: pointer; border: 1.5px solid ${chk.result === 'NO_CUMPLE' ? '#DC2626' : '#CBD5E1'}; background: ${chk.result === 'NO_CUMPLE' ? '#FEE2E2' : '#F8FAFC'}; color: ${chk.result === 'NO_CUMPLE' ? '#B91C1C' : '#475569'};">
-                  âœ• NO CUMPLE
+                  ✕ NO CUMPLE
                 </button>
                 <button type="button" class="btn-chk-pill ${chk.result === 'NO_APLICA' ? 'active-noaplica' : ''}" data-idx="${idx}" data-val="NO_APLICA"
                   style="flex: 1; padding: 6px 4px; font-size: 11px; font-weight: 800; border-radius: 6px; cursor: pointer; border: 1.5px solid ${chk.result === 'NO_APLICA' ? '#64748B' : '#CBD5E1'}; background: ${chk.result === 'NO_APLICA' ? '#F1F5F9' : '#F8FAFC'}; color: ${chk.result === 'NO_APLICA' ? '#334155' : '#475569'};">
-                  â€” NO APLICA
+                  — NO APLICA
                 </button>
               </div>
-              <input type="text" class="form-input chk-obs" data-idx="${idx}" value="${chk.observation || ''}" placeholder="ObservaciÃ³n tÃ©cnica de campo..." style="font-size: 11px; padding: 4px 8px; min-height: 28px; height: 28px;" />
+              <input type="text" class="form-input chk-obs" data-idx="${idx}" value="${chk.observation || ''}" placeholder="Observación técnica de campo..." style="font-size: 11px; padding: 4px 8px; min-height: 28px; height: 28px;" />
             </div>
           `).join('')}
         </div>
@@ -274,7 +274,7 @@ export async function renderProtocolFormView(container, activity, session, onCom
     `;
   }
 
-  // Client-side Image Compression Helper (Â§4.3.1)
+  // Client-side Image Compression Helper (§4.3.1)
   async function compressImage(file, maxDim = 1280, quality = 0.75) {
     return new Promise((resolve) => {
       const img = new Image();
@@ -332,15 +332,15 @@ export async function renderProtocolFormView(container, activity, session, onCom
       <!-- Stepper Header -->
       <div class="stepper">
         <div class="step-item ${currentStep === 1 ? 'active' : currentStep > 1 ? 'completed' : ''}">
-          <div class="step-circle">${currentStep > 1 ? 'âœ“' : '1'}</div>
+          <div class="step-circle">${currentStep > 1 ? '✓' : '1'}</div>
           <span class="step-label">${t('form.step1')}</span>
         </div>
         <div class="step-item ${currentStep === 2 ? 'active' : currentStep > 2 ? 'completed' : ''}">
-          <div class="step-circle">${currentStep > 2 ? 'âœ“' : '2'}</div>
+          <div class="step-circle">${currentStep > 2 ? '✓' : '2'}</div>
           <span class="step-label">${t('form.step2')}</span>
         </div>
         <div class="step-item ${currentStep === 3 ? 'active' : currentStep > 3 ? 'completed' : ''}">
-          <div class="step-circle">${currentStep > 3 ? 'âœ“' : '3'}</div>
+          <div class="step-circle">${currentStep > 3 ? '✓' : '3'}</div>
           <span class="step-label">${t('form.step3')}</span>
         </div>
         <div class="step-item ${currentStep === 4 ? 'active' : ''}">
@@ -414,9 +414,9 @@ export async function renderProtocolFormView(container, activity, session, onCom
           <label class="form-label">${t('step1.gps_title')}</label>
           <div style="background: #F8FAFC; border: 1px solid var(--color-border); border-radius: 8px; padding: 12px;">
             <div style="display: flex; align-items: center; gap: 8px;">
-              <span style="font-size: 18px;">ðŸ“</span>
+              <span style="font-size: 18px;">📍</span>
               <span id="gps-display" style="font-size: 14px; font-weight: 700; color: #0284C7;">
-                ${formData.gps.lat.toFixed(6)}, ${formData.gps.lng.toFixed(6)} (Â±${formData.gps.accuracy}m)
+                ${formData.gps.lat.toFixed(6)}, ${formData.gps.lng.toFixed(6)} (±${formData.gps.accuracy}m)
               </span>
             </div>
             <span style="font-size: 11px; color: var(--color-text-muted); display: block; margin-top: 4px;">
@@ -449,7 +449,7 @@ export async function renderProtocolFormView(container, activity, session, onCom
               ${t('concrete.formwork_title')}
             </label>
             <div class="checklist-item ${isChecked ? 'checked' : ''}" id="chk-formwork">
-              <div class="checklist-checkbox">âœ“</div>
+              <div class="checklist-checkbox">✓</div>
               <div>
                 <div class="checklist-text">${t('concrete.formwork_label')}</div>
                 <div style="font-size: 12px; color: var(--color-text-secondary); margin-top: 2px;">
@@ -459,16 +459,16 @@ export async function renderProtocolFormView(container, activity, session, onCom
             </div>
           </div>
 
-          <!-- Tipo de concreto (from original GDC-PCC-2026 Â§2) -->
+          <!-- Tipo de concreto (from original GDC-PCC-2026 §2) -->
           <div style="margin-bottom: 18px; background: #F8FAFC; border: 1px solid var(--color-border); border-radius: 8px; padding: 12px;">
             <div style="font-size: 12px; font-weight: 800; color: #0284C7; margin-bottom: 10px;">
-              2. TIPO DE CONCRETO Y COLOCACIÃ“N
+              2. TIPO DE CONCRETO Y COLOCACIÓN
             </div>
             <div style="font-size: 11px; color: var(--color-text-muted); margin-bottom: 10px;">
-              Marcar con un aspa dentro del cuadro segÃºn corresponda.
+              Marcar con un aspa dentro del cuadro según corresponda.
             </div>
             <div class="form-group" style="margin-bottom: 10px;">
-              <label class="form-label">FÂ´c diseÃ±o</label>
+              <label class="form-label">F´c diseño</label>
               <select id="input-conc-fc" class="form-input">
                 <option value="280" selected>280 KG/CM2</option>
                 <option value="210">210 KG/CM2</option>
@@ -488,7 +488,7 @@ export async function renderProtocolFormView(container, activity, session, onCom
             </div>
             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
               <div class="form-group" style="margin-bottom: 0;">
-                <label class="form-label">COLOCACIÃ“N</label>
+                <label class="form-label">COLOCACIÓN</label>
                 <div style="display: flex; align-items: center; gap: 6px; font-size: 13px; background: #fff; border: 1px solid var(--color-border); border-radius: 6px; padding: 8px;">
                   <input type="checkbox" id="input-conc-coloc" /> Directo
                 </div>
@@ -496,7 +496,7 @@ export async function renderProtocolFormView(container, activity, session, onCom
               <div class="form-group" style="margin-bottom: 0;">
                 <label class="form-label">ACABADO</label>
                 <select id="input-conc-acabado" class="form-input">
-                  <option value="">â€”</option>
+                  <option value="">—</option>
                   <option value="caravista">Caravista</option>
                   <option value="otro">Otro</option>
                 </select>
@@ -504,23 +504,23 @@ export async function renderProtocolFormView(container, activity, session, onCom
             </div>
           </div>
 
-          <!-- CubicaciÃ³n (from original GDC-PCC-2026) -->
+          <!-- Cubicación (from original GDC-PCC-2026) -->
           <div style="margin-bottom: 18px;">
             <div style="font-size: 12px; font-weight: 800; color: #0284C7; margin-bottom: 8px;">
-              CUBICACIÃ“N
+              CUBICACIÓN
             </div>
             <div id="cubicacion-container">
               ${[0,1,2,3,4].map(i => `
                 <div class="cubic-row" data-idx="${i}" style="display: grid; grid-template-columns: 2fr 1fr 1fr 1fr 1fr; gap: 6px; margin-bottom: 6px;">
-                  <input type="text" class="form-input cubic-elem" placeholder="Elemento${i===0?' (ej. PAÃ‘O TIPO 1)':''}" style="font-size: 12px;" />
-                  <input type="number" step="any" class="form-input cubic-veces" placeholder="NÂ° veces" style="font-size: 12px;" />
+                  <input type="text" class="form-input cubic-elem" placeholder="Elemento${i===0?' (ej. PAÑO TIPO 1)':''}" style="font-size: 12px;" />
+                  <input type="number" step="any" class="form-input cubic-veces" placeholder="N° veces" style="font-size: 12px;" />
                   <input type="number" step="any" class="form-input cubic-long" placeholder="Long" style="font-size: 12px;" />
                   <input type="number" step="any" class="form-input cubic-base" placeholder="Base" style="font-size: 12px;" />
                   <input type="number" step="any" class="form-input cubic-alt" placeholder="Altura" style="font-size: 12px;" />
                 </div>
               `).join('')}
             </div>
-            <div style="font-size: 11px; color: var(--color-text-muted);">Parcial = NÂ° veces Ã— Long Ã— Base Ã— Altura. El total se calcula al generar el protocolo.</div>
+            <div style="font-size: 11px; color: var(--color-text-muted);">Parcial = N° veces × Long × Base × Altura. El total se calcula al generar el protocolo.</div>
           </div>
 
           <!-- Mixer Trucks Dynamic Section -->
@@ -555,10 +555,10 @@ export async function renderProtocolFormView(container, activity, session, onCom
           <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
             <div class="form-group">
               <label class="form-label">Equipo utilizado</label>
-              <input type="text" id="input-survey-equip" class="form-input" value="${equipVal}" placeholder="EstaciÃ³n total / Nivel Ã³ptico" />
+              <input type="text" id="input-survey-equip" class="form-input" value="${equipVal}" placeholder="Estación total / Nivel óptico" />
             </div>
             <div class="form-group">
-              <label class="form-label">NÂ° Certificado calibraciÃ³n</label>
+              <label class="form-label">N° Certificado calibración</label>
               <input type="text" id="input-survey-cert" class="form-input" value="${certVal}" placeholder="CERT-TOP-2026-___" />
             </div>
           </div>
@@ -578,7 +578,7 @@ export async function renderProtocolFormView(container, activity, session, onCom
             </div>
             <div id="survey-feedback-msg"></div>
             <div class="criteria-hint">
-              â„¹ï¸ Tolerancia del Expediente: <strong>â‰¤ 1.0 cm</strong>
+              ℹ️ Tolerancia del Expediente: <strong>≤ 1.0 cm</strong>
             </div>
           </div>
 
@@ -609,7 +609,7 @@ export async function renderProtocolFormView(container, activity, session, onCom
             </div>
             <div id="comp-feedback-msg"></div>
             <div class="criteria-hint">
-              â„¹ï¸ Exigido: <strong>â‰¥ 100.0%</strong>
+              ℹ️ Exigido: <strong>≥ 100.0%</strong>
             </div>
           </div>
 
@@ -628,7 +628,7 @@ export async function renderProtocolFormView(container, activity, session, onCom
             </div>
             <div id="moisture-feedback-msg"></div>
             <div class="criteria-hint">
-              â„¹ï¸ Tolerancia: <strong>Â±1.5%</strong>
+              ℹ️ Tolerancia: <strong>±1.5%</strong>
             </div>
           </div>
 
@@ -647,7 +647,7 @@ export async function renderProtocolFormView(container, activity, session, onCom
             </div>
             <div id="subbase-feedback-msg"></div>
             <div class="criteria-hint">
-              â„¹ï¸ Exigido: <strong>â‰¥ 20 cm</strong>
+              ℹ️ Exigido: <strong>≥ 20 cm</strong>
             </div>
           </div>
 
@@ -666,7 +666,7 @@ export async function renderProtocolFormView(container, activity, session, onCom
             </div>
             <div id="base-feedback-msg"></div>
             <div class="criteria-hint">
-              â„¹ï¸ Exigido: <strong>â‰¥ 25 cm</strong>
+              ℹ️ Exigido: <strong>≥ 25 cm</strong>
             </div>
           </div>
 
@@ -696,7 +696,7 @@ export async function renderProtocolFormView(container, activity, session, onCom
             </div>
           </div>
           <div class="form-group">
-            <label class="form-label">Fecha de liberaciÃ³n</label>
+            <label class="form-label">Fecha de liberación</label>
             <input type="date" id="input-steel-fecha-lib" class="form-input"
               value="${formData.measurements.fecha_liberacion || ''}" />
           </div>
@@ -716,7 +716,7 @@ export async function renderProtocolFormView(container, activity, session, onCom
             </div>
             <div id="steel-spacing-feedback-msg"></div>
             <div class="criteria-hint">
-              â„¹ï¸ Tolerancia: <strong>14.0 - 16.0 cm</strong>
+              ℹ️ Tolerancia: <strong>14.0 - 16.0 cm</strong>
             </div>
           </div>
 
@@ -735,7 +735,7 @@ export async function renderProtocolFormView(container, activity, session, onCom
             </div>
             <div id="steel-cover-feedback-msg"></div>
             <div class="criteria-hint">
-              â„¹ï¸ Exigido: <strong>â‰¥ 5.0 cm</strong>
+              ℹ️ Exigido: <strong>≥ 5.0 cm</strong>
             </div>
           </div>
 
@@ -754,7 +754,7 @@ export async function renderProtocolFormView(container, activity, session, onCom
           </h3>
 
           <div class="form-group">
-            <label class="form-label">DesviaciÃ³n de Plomo y Alineamiento Vertical</label>
+            <label class="form-label">Desviación de Plomo y Alineamiento Vertical</label>
             <div class="input-wrapper">
               <input 
                 type="number" 
@@ -767,12 +767,12 @@ export async function renderProtocolFormView(container, activity, session, onCom
               <span class="input-unit">mm</span>
             </div>
             <div class="criteria-hint">
-              â„¹ï¸ Tolerancia EG-2013: <strong>â‰¤ 5.0 mm</strong>
+              ℹ️ Tolerancia EG-2013: <strong>≤ 5.0 mm</strong>
             </div>
           </div>
 
           <div class="form-group">
-            <label class="form-label">DesviaciÃ³n en Dimensiones de SecciÃ³n Transversal</label>
+            <label class="form-label">Desviación en Dimensiones de Sección Transversal</label>
             <div class="input-wrapper">
               <input 
                 type="number" 
@@ -785,14 +785,14 @@ export async function renderProtocolFormView(container, activity, session, onCom
               <span class="input-unit">mm</span>
             </div>
             <div class="criteria-hint">
-              â„¹ï¸ Tolerancia del Expediente: <strong>Â± 5.0 mm</strong>
+              ℹ️ Tolerancia del Expediente: <strong>± 5.0 mm</strong>
             </div>
           </div>
 
           <div class="form-group">
-            <label class="form-label">AplicaciÃ³n de Desmoldante QuÃ­mico</label>
+            <label class="form-label">Aplicación de Desmoldante Químico</label>
             <div class="checklist-item ${formData.measurements.release_agent_applied !== false ? 'checked' : ''}" id="chk-release-agent">
-              <div class="checklist-checkbox">âœ“</div>
+              <div class="checklist-checkbox">✓</div>
               <div>
                 <div class="checklist-text">Desmoldante verificado y fondo de encofrado limpio</div>
                 <div style="font-size: 12px; color: var(--color-text-secondary); margin-top: 2px;">
@@ -805,9 +805,9 @@ export async function renderProtocolFormView(container, activity, session, onCom
           <div class="form-group">
             <label class="form-label">Rigidez de Apuntalamiento y Arriostramiento</label>
             <div class="checklist-item ${formData.measurements.shoring_rigid !== false ? 'checked' : ''}" id="chk-shoring">
-              <div class="checklist-checkbox">âœ“</div>
+              <div class="checklist-checkbox">✓</div>
               <div>
-                <div class="checklist-text">Puntales y soleras rÃ­gidas aseguradas</div>
+                <div class="checklist-text">Puntales y soleras rígidas aseguradas</div>
                 <div style="font-size: 12px; color: var(--color-text-secondary); margin-top: 2px;">
                   Capacidad de carga calculada para soportar empuje de vaciado.
                 </div>
@@ -827,7 +827,7 @@ export async function renderProtocolFormView(container, activity, session, onCom
           ${t('step3.title')} ${evidenceOptional ? '<span style="font-size: 11px; font-weight: 700; color: #64748B; background: #F1F5F9; padding: 2px 8px; border-radius: 4px; vertical-align: middle;">OPCIONAL</span>' : ''}
         </h3>
         <p style="font-size: 12px; color: var(--color-text-secondary); margin-bottom: 16px;">
-          ${evidenceOptional ? 'La evidencia fotogrÃ¡fica es opcional para este protocolo. Puede continuar sin adjuntar fotos.' : t('step3.hint')}
+          ${evidenceOptional ? 'La evidencia fotográfica es opcional para este protocolo. Puede continuar sin adjuntar fotos.' : t('step3.hint')}
         </p>
         <div id="step3-photo-error" style="display: none; background: #FEF2F2; border: 1px solid #FECACA; border-radius: 8px; padding: 10px 12px; font-size: 12px; color: #991B1B; margin-bottom: 12px;"></div>
 
@@ -842,7 +842,7 @@ export async function renderProtocolFormView(container, activity, session, onCom
           ${formData.localPhotos.map((p, i) => `
             <div style="position: relative; border-radius: 8px; overflow: hidden; border: 1px solid var(--color-border);">
               <img src="${p.dataUrl}" style="width: 100%; height: 110px; object-fit: cover;" />
-              <button type="button" class="btn-remove-photo" data-index="${i}" style="position: absolute; top: 4px; right: 4px; background: rgba(0,0,0,0.6); color: #fff; border: none; border-radius: 50%; width: 24px; height: 24px; font-size: 12px; cursor: pointer;">âœ•</button>
+              <button type="button" class="btn-remove-photo" data-index="${i}" style="position: absolute; top: 4px; right: 4px; background: rgba(0,0,0,0.6); color: #fff; border: none; border-radius: 50%; width: 24px; height: 24px; font-size: 12px; cursor: pointer;">✕</button>
             </div>
           `).join('')}
         </div>
@@ -862,7 +862,7 @@ export async function renderProtocolFormView(container, activity, session, onCom
         ${hasNC ? `
           <div style="background: #FEF2F2; border: 1.5px solid #FECACA; border-radius: 8px; padding: 14px; margin-bottom: 18px;">
             <div style="display: flex; align-items: flex-start; gap: 8px;">
-              <span style="font-size: 20px;">âš ï¸</span>
+              <span style="font-size: 20px;">⚠️</span>
               <div>
                 <div style="font-size: 13px; font-weight: 800; color: #991B1B;">
                   ${t('form.pre_verdict_nc')}
@@ -876,13 +876,13 @@ export async function renderProtocolFormView(container, activity, session, onCom
         ` : `
           <div style="background: #ECFDF5; border: 1.5px solid #A7F3D0; border-radius: 8px; padding: 14px; margin-bottom: 18px;">
             <div style="display: flex; align-items: center; gap: 8px;">
-              <span style="font-size: 20px;">âœ…</span>
+              <span style="font-size: 20px;">✅</span>
               <div>
                 <div style="font-size: 13px; font-weight: 800; color: #065F46;">
                   ${t('form.pre_verdict_pass')}
                 </div>
                 <div style="font-size: 12px; color: #047857; margin-top: 2px;">
-                  Toda la informaciÃ³n requerida estÃ¡ completa. El protocolo se generarÃ¡ con el formato original.
+                  Toda la información requerida está completa. El protocolo se generará con el formato original.
                 </div>
               </div>
             </div>
@@ -901,7 +901,7 @@ export async function renderProtocolFormView(container, activity, session, onCom
             ${session.role}
           </div>
           <div style="font-size: 11px; color: var(--color-text-muted); margin-top: 6px;">
-            Los demÃ¡s especialistas revisan y verifican la informaciÃ³n; la aprobaciÃ³n y firmas fÃ­sicas siguen el proceso real de obra.
+            Los demás especialistas revisan y verifican la información; la aprobación y firmas físicas siguen el proceso real de obra.
           </div>
         </div>
 
@@ -911,7 +911,7 @@ export async function renderProtocolFormView(container, activity, session, onCom
         </div>
 
         <div style="background: #EFF6FF; border: 1px solid #BFDBFE; border-radius: 8px; padding: 12px; font-size: 12px; color: #1E40AF;">
-          ðŸ“„ Al generar, PROTOKOL produce el protocolo completado con el formato original del documento (campos, checklist, observaciones y evidencia).
+          📄 Al generar, PROTOKOL produce el protocolo completado con el formato original del documento (campos, checklist, observaciones y evidencia).
         </div>
       `;
     }
@@ -937,7 +937,7 @@ export async function renderProtocolFormView(container, activity, session, onCom
           </span>
           ${trucksState.length > 1 ? `
             <button type="button" class="btn-remove-truck" data-index="${idx}" style="background: none; border: none; color: #EF4444; font-size: 12px; font-weight: 700; cursor: pointer;">
-              âœ• ${t('concrete.remove_truck')}
+              ✕ ${t('concrete.remove_truck')}
             </button>
           ` : ''}
         </div>
@@ -955,10 +955,10 @@ export async function renderProtocolFormView(container, activity, session, onCom
 
         <div class="form-group" style="margin-bottom: 12px;">
           <label class="form-label">Proveedor de Concreto Premezclado</label>
-          <input type="text" class="form-input truck-supplier" data-index="${idx}" value="${truck.supplier || 'Concreto TitÃ¡n'}" placeholder="Concreto TitÃ¡n" />
+          <input type="text" class="form-input truck-supplier" data-index="${idx}" value="${truck.supplier || 'Concreto Titán'}" placeholder="Concreto Titán" />
         </div>
 
-        <!-- Discrete Slump Selector (Â§3.3 / F2) -->
+        <!-- Discrete Slump Selector (§3.3 / F2) -->
         <div class="form-group" style="margin-bottom: 14px;">
           <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
             <label class="form-label" style="margin-bottom: 0;">Asentamiento / Slump (Selector Discreto)</label>
@@ -981,7 +981,7 @@ export async function renderProtocolFormView(container, activity, session, onCom
             }).join('')}
           </div>
           <input type="hidden" class="truck-slump" data-index="${idx}" value="${truck.slump || '4'}" />
-          <span class="form-label-hint">Selector de valores fijos por camiÃ³n mixer (3.5", 4", 4.5", 5" segÃºn EG-2013).</span>
+          <span class="form-label-hint">Selector de valores fijos por camión mixer (3.5", 4", 4.5", 5" según EG-2013).</span>
         </div>
 
         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
@@ -1003,9 +1003,9 @@ export async function renderProtocolFormView(container, activity, session, onCom
           <div class="form-group">
             <label class="form-label">${t('concrete.design_fc')}</label>
             <select class="form-input truck-fc" data-index="${idx}">
-              <option value="280" ${truck.design_fc === 280 ? 'selected' : ''}>280 kg/cmÂ² (Pavimento)</option>
-              <option value="210" ${truck.design_fc === 210 ? 'selected' : ''}>210 kg/cmÂ² (Estructural)</option>
-              <option value="175" ${truck.design_fc === 175 ? 'selected' : ''}>175 kg/cmÂ² (Cimientos)</option>
+              <option value="280" ${truck.design_fc === 280 ? 'selected' : ''}>280 kg/cm² (Pavimento)</option>
+              <option value="210" ${truck.design_fc === 210 ? 'selected' : ''}>210 kg/cm² (Estructural)</option>
+              <option value="175" ${truck.design_fc === 175 ? 'selected' : ''}>175 kg/cm² (Cimientos)</option>
             </select>
           </div>
         </div>
@@ -1024,7 +1024,7 @@ export async function renderProtocolFormView(container, activity, session, onCom
         container.querySelectorAll('.truck-card').forEach((card, idx) => {
           const mixer = card.querySelector('.truck-mixer')?.value.trim() || '';
           const guia = card.querySelector('.truck-guia')?.value.trim() || '';
-          const supplier = card.querySelector('.truck-supplier')?.value.trim() || 'Concreto TitÃ¡n';
+          const supplier = card.querySelector('.truck-supplier')?.value.trim() || 'Concreto Titán';
           const slump = card.querySelector('.truck-slump')?.value.trim() || '4';
           const cyl = card.querySelector('.truck-cylinders')?.value.trim() || '4';
           const fc = card.querySelector('.truck-fc')?.value || '280';
@@ -1054,7 +1054,7 @@ export async function renderProtocolFormView(container, activity, session, onCom
           notes: t.notes
         }));
 
-        // Protocol-specific fields from original GDC-PCC-2026 Â§2
+        // Protocol-specific fields from original GDC-PCC-2026 §2
         const fcEl = container.querySelector('#input-conc-fc');
         if (fcEl) formData.measurements.design_fc = fcEl.value;
         const procEl = container.querySelector('input[name="conc-proc"]:checked');
@@ -1064,7 +1064,7 @@ export async function renderProtocolFormView(container, activity, session, onCom
         const acabEl = container.querySelector('#input-conc-acabado');
         if (acabEl) formData.measurements.acabado = acabEl.value;
 
-        // CubicaciÃ³n rows
+        // Cubicación rows
         const cubRows = [];
         container.querySelectorAll('.cubic-row').forEach(row => {
           const elem = row.querySelector('.cubic-elem')?.value.trim() || '';
@@ -1130,7 +1130,7 @@ export async function renderProtocolFormView(container, activity, session, onCom
         formData.measurements.tightness_verified = chkVal;
       }
 
-      // Sync paper checklist observations (Â§3.6 / F1)
+      // Sync paper checklist observations (§3.6 / F1)
       container.querySelectorAll('.checklist-row-card').forEach(row => {
         const idx = parseInt(row.getAttribute('data-idx'), 10);
         const obs = row.querySelector('.chk-obs')?.value.trim() || '';
@@ -1153,7 +1153,7 @@ export async function renderProtocolFormView(container, activity, session, onCom
     advEl.className = 'quality-advisory-banner advisory-nc';
     advEl.innerHTML = `
       <div style="display: flex; align-items: flex-start; gap: 8px;">
-        <span style="font-size: 18px;">âš ï¸</span>
+        <span style="font-size: 18px;">⚠️</span>
         <div style="flex: 1;">
           <div style="font-weight: 800; font-size: 14px; color: #991B1B; margin-bottom: 4px;">
             ${t('form.quality_advisory_title')}
@@ -1244,7 +1244,7 @@ export async function renderProtocolFormView(container, activity, session, onCom
         if (currentStep === 3 && activity !== 'SURVEY' && formData.localPhotos.length === 0) {
           const errEl = container.querySelector('#step3-photo-error');
           if (errEl) {
-            errEl.innerText = 'Este protocolo requiere al menos una evidencia fotogrÃ¡fica. Tome o suba una foto para continuar.';
+            errEl.innerText = 'Este protocolo requiere al menos una evidencia fotográfica. Tome o suba una foto para continuar.';
             errEl.style.display = 'block';
           }
           return;
@@ -1495,7 +1495,7 @@ export async function renderProtocolFormView(container, activity, session, onCom
     }
 
     // Step 3 Photo capture
-    // Step 3 Photo capture with Local Compression (Â§4.3.1)
+    // Step 3 Photo capture with Local Compression (§4.3.1)
     if (currentStep === 3) {
       const cameraInput = container.querySelector('#camera-input');
       const openCamBtn = container.querySelector('#btn-open-camera');
@@ -1544,7 +1544,7 @@ export async function renderProtocolFormView(container, activity, session, onCom
       });
     }
 
-    // Step 4 Submit with Photos-First Upload & Signatures (Â§4.3.3)
+    // Step 4 Submit with Photos-First Upload & Signatures (§4.3.3)
     const submitBtn = container.querySelector('#btn-submit-protocol');
     if (submitBtn) {
       submitBtn.addEventListener('click', async () => {
@@ -1558,7 +1558,7 @@ export async function renderProtocolFormView(container, activity, session, onCom
         // 1. Strict Photos-First Order: If online, upload photos before submitting protocol
         let uploadedPhotoIds = [];
         if (navigator.onLine && formData.localPhotos.length > 0) {
-          submitBtn.innerText = 'Subiendo fotos con compresiÃ³n...';
+          submitBtn.innerText = 'Subiendo fotos con compresión...';
           for (const p of formData.localPhotos) {
             try {
               const fd = new FormData();
@@ -1607,7 +1607,7 @@ export async function renderProtocolFormView(container, activity, session, onCom
         // If offline, queue locally
         if (!navigator.onLine) {
           await queueSubmission(payload);
-          alert('Protocolo guardado en cola local (Modo Offline). Se sincronizarÃ¡ automÃ¡ticamente.');
+          alert('Protocolo guardado en cola local (Modo Offline). Se sincronizará automáticamente.');
           onCompleted({
             protocol_id: `OFFLINE-${Date.now()}`,
             verdict: activity === 'CONCRETE' ? 'PROVISIONAL_PASS' : 'PASS',
