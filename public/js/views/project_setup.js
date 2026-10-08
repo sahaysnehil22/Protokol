@@ -19,9 +19,28 @@ export function renderProjectSetupView(container, onProjectCreated, onCancel) {
       </div>
 
       <form id="project-setup-form" novalidate>
-        <!-- 1. Información General del Proyecto (F5) -->
+        <!-- 1. Equipo de Ingenieros y Especialistas del Proyecto (moved first per 2026-10-08 direction) -->
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; flex-wrap: wrap; gap: 8px;">
+          <div>
+            <div style="font-size: 13px; font-weight: 800; color: #0284C7; text-transform: uppercase;">
+              1. Equipo de Ingenieros y Especialistas
+            </div>
+            <div style="font-size: 11px; color: var(--color-text-secondary); margin-top: 2px;">
+              Quien llena el protocolo es el Especialista de Calidad. El equipo alimenta el cuadro de firmas en los protocolos.
+            </div>
+          </div>
+          <button type="button" id="btn-add-tech-row" class="btn btn-outline" style="font-size: 11px; padding: 2px 10px; height: 28px; min-height: 28px;">
+            + Agregar Ingeniero / Especialista
+          </button>
+        </div>
+
+        <div id="tech-roster-container" style="display: flex; flex-direction: column; gap: 12px; margin-bottom: 18px;">
+          <!-- Dynamically populated engineer cards -->
+        </div>
+
+        <!-- 2. Información General del Proyecto -->
         <div style="font-size: 13px; font-weight: 800; color: #0284C7; text-transform: uppercase; margin-bottom: 12px;">
-          1. Información General del Proyecto
+          2. Información General del Proyecto
         </div>
 
         <div class="form-group">
@@ -33,11 +52,6 @@ export function renderProjectSetupView(container, onProjectCreated, onCancel) {
         <div class="form-group">
           <label class="form-label">${t('setup.name')}</label>
           <input type="text" id="proj-name" class="form-input" placeholder="Mejoramiento y Ampliación de Transitabilidad Tramo AY-728 a AY-729" required />
-        </div>
-
-        <div class="form-group">
-          <label class="form-label">${t('setup.contract')}</label>
-          <input type="text" id="proj-contract" class="form-input" placeholder="N° 81-2026-GRA-SEDECENTRAL-OAPF" required />
         </div>
 
         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
@@ -70,11 +84,6 @@ export function renderProjectSetupView(container, onProjectCreated, onCancel) {
           </div>
         </div>
 
-        <div class="form-group">
-          <label class="form-label">${t('setup.road_section')}</label>
-          <input type="text" id="proj-section" class="form-input" placeholder="Tramo AY-728 a AY-729 (km 0+000 a 2+380)" />
-        </div>
-
         <!-- Centralized PROJECT PIN (two-tier auth, 2026-10-03): set once by the
              company, shared with the crew. Employees cannot change it. -->
         <div class="form-group" style="background: #FFFBEB; border: 1px solid #FCD34D; border-radius: 8px; padding: 12px;">
@@ -87,25 +96,6 @@ export function renderProjectSetupView(container, onProjectCreated, onCancel) {
               style="position: absolute; right: 8px; top: 50%; transform: translateY(-50%); background: none; border: none; font-size: 18px; cursor: pointer; padding: 4px;">👁️</button>
           </div>
           <span class="form-label-hint">${t('setup.project_pin_hint')}</span>
-        </div>
-
-        <!-- 2. Equipo de Ingenieros y Especialistas del Proyecto (F6 - Feeds PDF signature grid) -->
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 24px; margin-bottom: 12px; flex-wrap: wrap; gap: 8px;">
-          <div>
-            <div style="font-size: 13px; font-weight: 800; color: #0284C7; text-transform: uppercase;">
-              2. Equipo de Ingenieros y Especialistas (Cuadro de Firmas PPI)
-            </div>
-            <div style="font-size: 11px; color: var(--color-text-secondary); margin-top: 2px;">
-              Este equipo alimenta directamente el cuadro oficial de firmas y sellos en los protocolos y el dosier final.
-            </div>
-          </div>
-          <button type="button" id="btn-add-tech-row" class="btn btn-outline" style="font-size: 11px; padding: 2px 10px; height: 28px; min-height: 28px;">
-            + Agregar Ingeniero / Especialista
-          </button>
-        </div>
-
-        <div id="tech-roster-container" style="display: flex; flex-direction: column; gap: 12px; margin-bottom: 18px;">
-          <!-- Dynamically populated engineer cards -->
         </div>
 
         <div id="setup-error" style="color: #F87171; font-size: 13px; margin-bottom: 14px; display: none;"></div>
@@ -235,13 +225,11 @@ export function renderProjectSetupView(container, onProjectCreated, onCancel) {
     try {
       const id = container.querySelector('#proj-id')?.value.trim() || '';
       const name = container.querySelector('#proj-name')?.value.trim() || '';
-      const contract_number = container.querySelector('#proj-contract')?.value.trim() || '';
       const entity = container.querySelector('#proj-entity')?.value.trim() || '';
       const execution_mode = container.querySelector('#proj-mode')?.value || 'Administración Directa';
       const location = container.querySelector('#proj-location')?.value.trim() || '';
-      const road_section = container.querySelector('#proj-section')?.value.trim() || '';
 
-      // Validate required project information
+      // Validate required project information (contract & road section removed per 2026-10-08 direction)
       if (!id) {
         errorDiv.innerText = 'El Código / ID del Proyecto es obligatorio (ej. AY-728-002).';
         errorDiv.style.display = 'block';
@@ -252,12 +240,6 @@ export function renderProjectSetupView(container, onProjectCreated, onCancel) {
         errorDiv.innerText = 'El Nombre Completo del Proyecto es obligatorio.';
         errorDiv.style.display = 'block';
         container.querySelector('#proj-name')?.focus();
-        return;
-      }
-      if (!contract_number) {
-        errorDiv.innerText = 'El Número de Contrato es obligatorio.';
-        errorDiv.style.display = 'block';
-        container.querySelector('#proj-contract')?.focus();
         return;
       }
       if (!entity) {
@@ -326,11 +308,9 @@ export function renderProjectSetupView(container, onProjectCreated, onCancel) {
         id,
         access_pin: accessPin,
         name,
-        contract_number,
         entity,
         execution_mode,
         location,
-        road_section,
         timezone: 'America/Lima',
         timezone_offset: '-05:00',
         whatsapp_recipients: recipients,
