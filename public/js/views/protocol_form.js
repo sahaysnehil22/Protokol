@@ -1121,6 +1121,12 @@ export async function renderProtocolFormView(container, activity, session, onCom
           formData.measurements.alignment_mm = parseFloat(al.value);
         }
         if (sc) formData.measurements.section_dimension_deviation_mm = parseFloat(sc.value);
+        const fwElem = container.querySelector('#input-formwork-elemento');
+        if (fwElem) formData.measurements.elemento = fwElem.value.trim();
+        const fwPlano = container.querySelector('#input-formwork-plano');
+        if (fwPlano) formData.measurements.plano_referencia = fwPlano.value.trim();
+        const fwFecha = container.querySelector('#input-formwork-fecha-lib');
+        if (fwFecha) formData.measurements.fecha_liberacion = fwFecha.value;
         // Derive checklist-based criteria from the paper checklist state:
         // surface / release agent / tightness are verified via the checklist
         const anyNc = Array.isArray(checklistState) && checklistState.some(c => c.result === 'NO_CUMPLE');
