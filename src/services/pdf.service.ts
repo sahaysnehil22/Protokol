@@ -321,8 +321,10 @@ export class PdfService {
         y = this.renderConcreteBody(doc, startX, y, pageWidth, protocolChecks, trucks, docSpec, params.protocol);
       } else if (params.protocol.activity === 'STEEL') {
         y = this.renderSteelBody(doc, startX, y, pageWidth, protocolChecks, docSpec);
+      } else if (params.protocol.activity === 'FORMWORK') {
+        y = this.renderFormworkBody(doc, startX, y, pageWidth, protocolChecks, docSpec);
       } else {
-        // Encofrado, Compaction standard checklist grid
+        // Compaction standard checklist grid
         y = this.renderStandardChecklistBody(doc, startX, y, pageWidth, protocolChecks, docSpec, params.protocol.activity);
       }
 
@@ -777,7 +779,91 @@ export class PdfService {
   }
 
   /**
-   * Renders standard checklist format (Encofrado GDC-PDE-2026, Acero FO01PT03, Compaction).
+   * Renders the formwork protocol body as an exact mirror of 02._PAVIMENTO_ENCOFRADO_MI.xlsx
+   * (sheet '6'): 2 sections (DESCRIPCION DE ACTIVIDAD, VERIFICACIÓN DE LOS MATERIALES),
+   * 8 items verbatim (2.03 deliberately skipped in the original), CUMPLE / NO CUMPLE /
+   * NO APLICA / Observación columns. Spanish labels preserved exactly as in the original.
+   */
+  private renderFormworkBody(doc: PDFKit.PDFDocument, x: number, y: number, width: number, protocolChecks: any[], docSpec: GoreDocSpec): number {
+    doc.fillColor('#000000').strokeColor('#000000').lineWidth(0.75);
+
+    const sections = [
+      {
+        num: '1', name: 'DESCRIPCION DE ACTIVIDAD',
+        items: [
+          { order: '1.01', text: '¿Tipo de encofrado es adecuado para el tipo de estructura a concretar?', idx: 1 },
+          { order: '1.02', text: '¿Los accesorios empleados son los adecuados?', idx: 2 },
+          { order: '1.03', text: '¿Ubicación correcta de los elementos embebidos?', idx: 3 },
+          { order: '1.04', text: '¿Los puntales son los adecuados?.', idx: 4 },
+        ]
+      },
+      {
+        num: '2', name: 'VERIFICACIÓN DE LOS MATERIALES',
+        items: [
+          { order: '2.01', text: 'Dimensiones del encofrado según los planos y las EETT.', idx: 5 },
+          { order: '2.02', text: 'Distancias entre ejes y longitudes de encofrado.', idx: 6 },
+          { order: '2.04', text: 'Verificación del alineamiento del encofrado.', idx: 7 },
+          { order: '2.05', text: 'Verificación de la verticalidad o inclinación en los diferentes encofrados', idx: 8 },
+        ]
+      }
+    ];
+
+    // Column layout (mirrors Excel cols B/C/G/H/I/J)
+    const numW = 32;
+    const checkW = 42;
+    const obsW = 110;
+    const textW = width - numW - checkW * 3 - obsW;
+    const obsX = x + width - obsW;
+    const ncX = obsX - checkW;
+    const cX = ncX - checkW;
+    const cumpleX = cX - checkW;
+
+    const mark = (cond: boolean) => (cond ? '[X]' : '[ ]');
+
+    for (const sec of sections) {
+      // Section header row (verbatim: N° | SECTION NAME | CUMPLE | NO CUMPLE | NO APLICA | Observación)
+      doc.rect(x, y, width, 13).fillAndStroke('#F1F5F9', '#000000');
+      doc.fillColor('#000000').fontSize(7).font('Helvetica-Bold');
+      doc.text(sec.num, x + 4, y + 3, { width: numW - 8 });
+      doc.text(sec.name, x + numW + 4, y + 3, { width: textW - 8 });
+      doc.fontSize(5.5);
+      doc.text('CUMPLE', cumpleX, y + 3, { width: checkW, align: 'center' });
+      doc.text('NO CUMPLE', cX, y + 3, { width: checkW, align: 'center' });
+      doc.text('NO APLICA', ncX, y + 3, { width: checkW, align: 'center' });
+      doc.text('Observación', obsX + 4, y + 3, { width: obsW - 8 });
+      y += 13;
+
+      for (const item of sec.items) {
+        const chk = protocolChecks.find((c: any) => c.item_order === item.idx);
+        const res = chk?.result;
+        const obs = chk?.observation || '';
+
+        doc.rect(x, y, width, 14).stroke();
+        // Vertical dividers
+        doc.moveTo(x + numW, y).lineTo(x + numW, y + 14).stroke();
+        doc.moveTo(cumpleX, y).lineTo(cumpleX, y + 14).stroke();
+        doc.moveTo(cX, y).lineTo(cX, y + 14).stroke();
+        doc.moveTo(ncX, y).lineTo(ncX, y + 14).stroke();
+        doc.moveTo(obsX, y).lineTo(obsX, y + 14).stroke();
+
+        doc.fontSize(6).font('Helvetica');
+        doc.text(item.order, x + 4, y + 4, { width: numW - 8 });
+        doc.fontSize(5.5).text(item.text, x + numW + 4, y + 2, { width: textW - 8, ellipsis: true });
+        doc.fontSize(6);
+        doc.text(mark(res === 'CUMPLE'), cumpleX, y + 4, { width: checkW, align: 'center' });
+        doc.text(mark(res === 'NO_CUMPLE'), cX, y + 4, { width: checkW, align: 'center' });
+        doc.text(mark(res === 'NO_APLICA'), ncX, y + 4, { width: checkW, align: 'center' });
+        doc.fontSize(5).text(obs, obsX + 4, y + 2, { width: obsW - 8, ellipsis: true });
+        y += 14;
+      }
+      y += 4;
+    }
+
+    return y;
+  }
+
+  /**
+   * Renders standard checklist format (Compaction — remaining generic user).
    */
   private renderStandardChecklistBody(doc: PDFKit.PDFDocument, x: number, y: number, width: number, protocolChecks: any[], docSpec: GoreDocSpec, activity: string): number {
     doc.fillColor('#000000').strokeColor('#000000').lineWidth(0.75);
