@@ -24,7 +24,7 @@ export interface GoreDocSpec {
 export const GORE_DOC_SPECS: Record<string, GoreDocSpec> = {
   FORMWORK: {
     code: 'GDC-PDE-2026',
-    rev: 'Versión: 001',
+    rev: 'VersiÃ³n: 001',
     date: '13/06/2026',
     title: 'PROTOCOLO DE ENCOFRADO',
     defaultPartida: 'ENCOFRADO Y DESENCOFRADO',
@@ -34,7 +34,7 @@ export const GORE_DOC_SPECS: Record<string, GoreDocSpec> = {
   },
   STEEL: {
     code: 'FO01PT03',
-    rev: 'Versión: 001',
+    rev: 'VersiÃ³n: 001',
     date: '13/06/2026',
     title: 'PROTOCOLO DE INSTALACION DE ACERO DE REFUERZO',
     defaultPartida: 'HABILITACION Y COLOCACION DE ACERO CORRUGADO PARA SOPORTE DOWELS',
@@ -44,9 +44,9 @@ export const GORE_DOC_SPECS: Record<string, GoreDocSpec> = {
   },
   CONCRETE: {
     code: 'GDC-PCC-2026',
-    rev: 'Versión: 001',
+    rev: 'VersiÃ³n: 001',
     date: '13/06/2026',
-    title: 'PROTOCOLO DE COLOCACIÓN DE PAVIMENTO RÍGIDO',
+    title: 'PROTOCOLO DE COLOCACIÃ“N DE PAVIMENTO RÃGIDO',
     defaultPartida: "CONCRETO FC=280 KG/CM2, EN PAVIMENTO RIGIDO E=0.25M",
     sigFamily: '5_BOX_PAVEMENT',
     checklistStateLabels: { pass: 'Si', fail: 'No', na: 'N/A' },
@@ -56,7 +56,7 @@ export const GORE_DOC_SPECS: Record<string, GoreDocSpec> = {
     code: 'GCO-PVT-2026',
     rev: 'Rev: 01',
     date: '08/06/2026',
-    title: 'PROTOCOLO DE VERIFICACIÓN TOPOGRÁFICA',
+    title: 'PROTOCOLO DE VERIFICACIÃ“N TOPOGRÃFICA',
     defaultPartida: 'TRAZO, NIVELACION Y REPLANTEO',
     sigFamily: '5_BOX_SURVEY',
     checklistStateLabels: { pass: 'C', fail: 'NC', na: 'NA' },
@@ -64,20 +64,20 @@ export const GORE_DOC_SPECS: Record<string, GoreDocSpec> = {
   },
   COMPACTION: {
     code: 'GDC-PCS-2026',
-    rev: 'Versión: 001',
+    rev: 'VersiÃ³n: 001',
     date: '13/06/2026',
-    title: 'PROTOCOLO DE CONTROL DE COMPACTACIÓN DE SUELOS',
+    title: 'PROTOCOLO DE CONTROL DE COMPACTACIÃ“N DE SUELOS',
     defaultPartida: 'CONFORMACION Y COMPACTACION DE SUB-BASE Y BASE',
     sigFamily: '4_BOX_PAVEMENT',
     checklistStateLabels: { pass: 'CUMPLE', fail: 'NO CUMPLE', na: 'NO APLICA' },
-    isConfirmed: false // Formato no confirmado en archivo físico (criterios EG-2013 referenciales)
+    isConfirmed: false // Formato no confirmado en archivo fÃ­sico (criterios EG-2013 referenciales)
   },
   CYLINDERS: {
     code: 'SGC-CRP-2026',
-    rev: 'Revisión: ---',
+    rev: 'RevisiÃ³n: ---',
     date: 'JULIO 2026',
     title: 'CONTROL DE ROTURAS DE PROBETA',
-    defaultPartida: 'ENSAYO DE RESISTENCIA A LA COMPRESIÓN',
+    defaultPartida: 'ENSAYO DE RESISTENCIA A LA COMPRESIÃ“N',
     sigFamily: '4_BOX_LAB',
     checklistStateLabels: { pass: 'PASS', fail: 'FAIL', na: 'N/A' },
     isConfirmed: true
@@ -140,9 +140,9 @@ export class PdfService {
         SELECT COUNT(*) as count FROM protocols WHERE project_id = ? AND id <= ?
       `).get(protocol.project_id, protocol.id) as { count: number } | undefined;
       const num = row?.count || 1;
-      return `N° ${String(num).padStart(4, '0')}`;
+      return `NÂ° ${String(num).padStart(4, '0')}`;
     } catch {
-      return `N° 0001`;
+      return `NÂ° 0001`;
     }
   }
 
@@ -165,11 +165,11 @@ export class PdfService {
       SELECT * FROM projects WHERE id = ?
     `).get(params.protocol.project_id) as unknown as ProjectRecord | undefined;
 
-    const projectName = project?.name || '“MEJORAMIENTO Y AMPLIACIÓN DEL SERVICIO DE TRANSITABILIDAD ENTRE EL TRAMO AY-728 (PENAL DE YANAMILLA) HASTA EL TRAMO AY-729 (PTAR) LONGITUD 2.38KM, EN EL DISTRITO DE ANDRES AVELINO CACERES- PROVINCIA DE HUAMANGA- DEPARTAMENTO DE AYACUCHO”';
+    const projectName = project?.name || 'â€œMEJORAMIENTO Y AMPLIACIÃ“N DEL SERVICIO DE TRANSITABILIDAD ENTRE EL TRAMO AY-728 (PENAL DE YANAMILLA) HASTA EL TRAMO AY-729 (PTAR) LONGITUD 2.38KM, EN EL DISTRITO DE ANDRES AVELINO CACERES- PROVINCIA DE HUAMANGA- DEPARTAMENTO DE AYACUCHOâ€';
     const executingEntity = 'GOBIERNO REGIONAL DE AYACUCHO SEDE CENTRAL';
     const supervisingEntity = (project as any)?.supervisor_entity || ''; // Blank on physical formats
     const roadSection = project?.road_section || 'AY-728 / AY-729 (Totora - Yanamilla)';
-    const referencePlan = 'PC-01 (PLANO CLAVE)'; // Canonical index reference
+    const referencePlan = this.getMeasurement(params.protocol, 'plano_referencia') || 'PC-01 (PLANO CLAVE)';
 
     const trucks = this.db.prepare(`
       SELECT * FROM concrete_trucks WHERE protocol_id = ? ORDER BY truck_number ASC
@@ -195,10 +195,10 @@ export class PdfService {
 
     const docSpec: GoreDocSpec = GORE_DOC_SPECS[params.protocol.activity] || {
       code: 'GDC-GEN-2026',
-      rev: 'Versión: 001',
+      rev: 'VersiÃ³n: 001',
       date: '13/06/2026',
       title: `PROTOCOLO DE ${params.protocol.activity}`,
-      defaultPartida: 'CONTROL DE CALIDAD Y PUNTOS DE INSPECCIÓN',
+      defaultPartida: 'CONTROL DE CALIDAD Y PUNTOS DE INSPECCIÃ“N',
       sigFamily: '4_BOX_PAVEMENT',
       checklistStateLabels: { pass: 'CUMPLE', fail: 'NO CUMPLE', na: 'NO APLICA' },
       isConfirmed: false
@@ -239,7 +239,7 @@ export class PdfService {
       doc.rect(centerStartX, y, centerW, headerHeight).stroke();
       doc.fontSize(9.5).font('Helvetica-Bold').text(docSpec.title, centerStartX + 5, y + 15, { width: centerW - 10, align: 'center' });
       if (!docSpec.isConfirmed && params.protocol.activity === 'COMPACTION') {
-        doc.fontSize(5.5).font('Helvetica-Oblique').text('(Criterios de compactación EG-2013 / Formato referencial)', centerStartX + 5, y + 32, { width: centerW - 10, align: 'center' });
+        doc.fontSize(5.5).font('Helvetica-Oblique').text('(Criterios de compactaciÃ³n EG-2013 / Formato referencial)', centerStartX + 5, y + 32, { width: centerW - 10, align: 'center' });
       }
 
       // Right Box: Control Code / Rev / Date (140 pt)
@@ -252,12 +252,12 @@ export class PdfService {
       doc.moveTo(rightStartX, y + rh3).lineTo(rightStartX + rightW, y + rh3).stroke();
       doc.moveTo(rightStartX, y + rh3 * 2).lineTo(rightStartX + rightW, y + rh3 * 2).stroke();
 
-      // Code label (Topografía uses Còdigo with grave accent verbatim)
-      const codeLabel = params.protocol.activity === 'SURVEY' ? 'Còdigo:' : (params.protocol.activity === 'STEEL' ? 'Codigo:' : 'Código:');
+      // Code label (TopografÃ­a uses CÃ²digo with grave accent verbatim)
+      const codeLabel = params.protocol.activity === 'SURVEY' ? 'CÃ²digo:' : (params.protocol.activity === 'STEEL' ? 'Codigo:' : 'CÃ³digo:');
       doc.fontSize(6.5).font('Helvetica-Bold').text(codeLabel, rightStartX + 6, y + 4);
       doc.font('Helvetica').text(docSpec.code, rightStartX + 42, y + 4);
 
-      doc.font('Helvetica-Bold').text('Versión:', rightStartX + 6, y + rh3 + 4);
+      doc.font('Helvetica-Bold').text('VersiÃ³n:', rightStartX + 6, y + rh3 + 4);
       doc.font('Helvetica').text(docSpec.rev, rightStartX + 42, y + rh3 + 4);
 
       doc.font('Helvetica-Bold').text('Fecha:', rightStartX + 6, y + rh3 * 2 + 4);
@@ -273,11 +273,11 @@ export class PdfService {
       doc.moveTo(startX, y + metaRowH * 2).lineTo(startX + pageWidth, y + metaRowH * 2).stroke();
       doc.moveTo(startX, y + metaRowH * 3).lineTo(startX + pageWidth, y + metaRowH * 3).stroke();
 
-      // Row 1: Obra + Fecha de liberación (verbatim K6 in the originals)
+      // Row 1: Obra + Fecha de liberaciÃ³n (verbatim K6 in the originals)
       doc.fontSize(6.5).font('Helvetica-Bold').text('Obra:', startX + 5, y + 4);
       doc.font('Helvetica').fontSize(5.5).text(projectName, startX + 32, y + 4, { width: 295, height: metaRowH - 2, ellipsis: true });
       const fechaLiberacion = this.getMeasurement(params.protocol, 'fecha_liberacion');
-      doc.fontSize(6.5).font('Helvetica-Bold').text('Fecha de liberación:', startX + 340, y + 4);
+      doc.fontSize(6.5).font('Helvetica-Bold').text('Fecha de liberaciÃ³n:', startX + 340, y + 4);
       doc.font('Helvetica').fontSize(6).text(fechaLiberacion ? this.formatDate(fechaLiberacion) : '', startX + 428, y + 4, { width: 90 });
 
       // Row 2: Ejecuta & Supervisa
@@ -287,17 +287,18 @@ export class PdfService {
       doc.font('Helvetica-Bold').text('Supervisa:', startX + 285, r2Y + 4);
       doc.font('Helvetica').text(supervisingEntity || '---', startX + 335, r2Y + 4, { width: 180 });
 
-      // Row 3: Ubicación & Plano Ref.
+      // Row 3: UbicaciÃ³n & Plano Ref.
       const r3Y = y + metaRowH * 2;
-      doc.font('Helvetica-Bold').text('Ubicación:', startX + 5, r3Y + 4);
+      doc.font('Helvetica-Bold').text('UbicaciÃ³n:', startX + 5, r3Y + 4);
       doc.font('Helvetica').text(`Progresiva ${params.protocol.chainage} (${roadSection})`, startX + 50, r3Y + 4, { width: 225 });
       doc.font('Helvetica-Bold').text('PLANO DE REFERENCIA:', startX + 285, r3Y + 4);
       doc.font('Helvetica').text(referencePlan, startX + 395, r3Y + 4, { width: 120 });
 
-      // Row 4: Elemento, Partida, Fecha Liberación, Correlativo N°
+      // Row 4: Elemento, Partida, Fecha LiberaciÃ³n, Correlativo NÂ°
       const r4Y = y + metaRowH * 3;
       doc.font('Helvetica-Bold').text('Elemento:', startX + 5, r4Y + 4);
-      doc.font('Helvetica').text(`Paño ${params.protocol.panel}`, startX + 48, r4Y + 4, { width: 65 });
+      const elementoVal = this.getMeasurement(params.protocol, 'elemento');
+      doc.font('Helvetica').text(elementoVal || `PaÃ±o ${params.protocol.panel}`, startX + 48, r4Y + 4, { width: 65 });
 
       doc.font('Helvetica-Bold').text('PARTIDA:', startX + 118, r4Y + 4);
       doc.font('Helvetica').fontSize(5.2).text(docSpec.defaultPartida, startX + 155, r4Y + 4, { width: 180, ellipsis: true });
@@ -305,7 +306,7 @@ export class PdfService {
       doc.fontSize(6.5).font('Helvetica-Bold').text('Fecha:', startX + 342, r4Y + 4);
       doc.font('Helvetica').text(formattedDate, startX + 372, r4Y + 4);
 
-      doc.font('Helvetica-Bold').text('Correlativo N°:', startX + 432, r4Y + 4);
+      doc.font('Helvetica-Bold').text('Correlativo NÂ°:', startX + 432, r4Y + 4);
       doc.font('Helvetica-Bold').text(correlativo, startX + 490, r4Y + 4);
 
       y += metaHeight + 8;
@@ -318,8 +319,10 @@ export class PdfService {
         y = this.renderSurveyBody(doc, startX, y, pageWidth, protocolChecks, docSpec);
       } else if (params.protocol.activity === 'CONCRETE') {
         y = this.renderConcreteBody(doc, startX, y, pageWidth, protocolChecks, trucks, docSpec, params.protocol);
+      } else if (params.protocol.activity === 'STEEL') {
+        y = this.renderSteelBody(doc, startX, y, pageWidth, protocolChecks, docSpec);
       } else {
-        // Encofrado, Acero, Compaction standard checklist grid
+        // Encofrado, Compaction standard checklist grid
         y = this.renderStandardChecklistBody(doc, startX, y, pageWidth, protocolChecks, docSpec, params.protocol.activity);
       }
 
@@ -330,7 +333,7 @@ export class PdfService {
 
       // Paper page minimal footer reference
       doc.fontSize(5.5).font('Helvetica').fillColor('#555555').text(
-        `Formato oficial impreso · Registro de Calidad en Obra AY-728/AY-729 · Ref: ${params.protocol.id}`,
+        `Formato oficial impreso Â· Registro de Calidad en Obra AY-728/AY-729 Â· Ref: ${params.protocol.id}`,
         startX,
         790,
         { width: pageWidth, align: 'center' }
@@ -360,12 +363,12 @@ export class PdfService {
   }
 
   /**
-   * Renders Topografía specific checklist, field data, and coordinates grid.
+   * Renders TopografÃ­a specific checklist, field data, and coordinates grid.
    */
   private renderSurveyBody(doc: PDFKit.PDFDocument, x: number, y: number, width: number, protocolChecks: any[], docSpec: GoreDocSpec): number {
     doc.fillColor('#000000').strokeColor('#000000').lineWidth(0.75);
 
-    // Header table for Survey: ITEM | LISTA DE VERIFICACIÓN | NA | INSPECCIÓN (C/NC) | OBSERVACIONES | V.B
+    // Header table for Survey: ITEM | LISTA DE VERIFICACIÃ“N | NA | INSPECCIÃ“N (C/NC) | OBSERVACIONES | V.B
     const itemW = 28;
     const descW = 250;
     const naW = 26;
@@ -377,7 +380,7 @@ export class PdfService {
     doc.rect(x, y, width, 18).stroke();
     doc.fontSize(6).font('Helvetica-Bold');
     doc.text('ITEM', x + 4, y + 6);
-    doc.text('LISTA DE VERIFICACIÓN', x + itemW + 6, y + 6);
+    doc.text('LISTA DE VERIFICACIÃ“N', x + itemW + 6, y + 6);
     doc.text('NA', x + itemW + descW + 6, y + 6);
     doc.text('INSP.', x + itemW + descW + naW + 4, y + 2);
     doc.text('(C / NC)', x + itemW + descW + naW + 2, y + 10);
@@ -387,17 +390,17 @@ export class PdfService {
 
     // Survey items grouped by 3 sections
     const defaultSurveyItems = [
-      { order: '1.1', section: '1. VERIFICACION PRELIMINAR', text: 'Area limpia y sin obstáculos' },
-      { order: '1.2', section: '1. VERIFICACION PRELIMINAR', text: 'Area de trabajo señalizada' },
+      { order: '1.1', section: '1. VERIFICACION PRELIMINAR', text: 'Area limpia y sin obstÃ¡culos' },
+      { order: '1.2', section: '1. VERIFICACION PRELIMINAR', text: 'Area de trabajo seÃ±alizada' },
       { order: '1.3', section: '1. VERIFICACION PRELIMINAR', text: 'Equipos y Herramientas Operativas' },
       { order: '1.4', section: '1. VERIFICACION PRELIMINAR', text: 'Se cuenta con todos los permisos de seguridad (AST, etc)' },
-      { order: '2.1', section: '2. VERIFICACIÓN DURANTE LA ACTIVIDAD', text: 'Ubicación de Puntos Auxiliares' },
-      { order: '2.2', section: '2. VERIFICACIÓN DURANTE LA ACTIVIDAD', text: 'Replanteo de Linderos del Terreno' },
-      { order: '2.3', section: '2. VERIFICACIÓN DURANTE LA ACTIVIDAD', text: 'Levantamiento Topográfico' },
-      { order: '2.4', section: '2. VERIFICACIÓN DURANTE LA ACTIVIDAD', text: 'Trazo y replanteo de ejes' },
-      { order: '2.5', section: '2. VERIFICACIÓN DURANTE LA ACTIVIDAD', text: 'Distancia y proporcionalidad entre ejes' },
-      { order: '2.6', section: '2. VERIFICACIÓN DURANTE LA ACTIVIDAD', text: 'Colocación de niveles' },
-      { order: '2.7', section: '2. VERIFICACIÓN DURANTE LA ACTIVIDAD', text: 'Verticalidad y alineamiento' },
+      { order: '2.1', section: '2. VERIFICACIÃ“N DURANTE LA ACTIVIDAD', text: 'UbicaciÃ³n de Puntos Auxiliares' },
+      { order: '2.2', section: '2. VERIFICACIÃ“N DURANTE LA ACTIVIDAD', text: 'Replanteo de Linderos del Terreno' },
+      { order: '2.3', section: '2. VERIFICACIÃ“N DURANTE LA ACTIVIDAD', text: 'Levantamiento TopogrÃ¡fico' },
+      { order: '2.4', section: '2. VERIFICACIÃ“N DURANTE LA ACTIVIDAD', text: 'Trazo y replanteo de ejes' },
+      { order: '2.5', section: '2. VERIFICACIÃ“N DURANTE LA ACTIVIDAD', text: 'Distancia y proporcionalidad entre ejes' },
+      { order: '2.6', section: '2. VERIFICACIÃ“N DURANTE LA ACTIVIDAD', text: 'ColocaciÃ³n de niveles' },
+      { order: '2.7', section: '2. VERIFICACIÃ“N DURANTE LA ACTIVIDAD', text: 'Verticalidad y alineamiento' },
       { order: '3.1', section: '3. VERIFICACIONES POSTERIORES', text: 'Recojo de Equipos y Herramientas' },
       { order: '3.2', section: '3. VERIFICACIONES POSTERIORES', text: 'Limpieza del Area de trabajo' }
     ];
@@ -428,7 +431,7 @@ export class PdfService {
       doc.text(isC, x + itemW + descW + naW + 4, y + 3);
       doc.text(isNc, x + itemW + descW + naW + cW + 4, y + 3);
       doc.text(obs, x + itemW + descW + naW + cW + ncW + 6, y + 3, { width: obsW - 10, ellipsis: true });
-      doc.text(res === 'CUMPLE' ? 'V°B°' : '', x + itemW + descW + naW + cW + ncW + obsW + 10, y + 3);
+      doc.text(res === 'CUMPLE' ? 'VÂ°BÂ°' : '', x + itemW + descW + naW + cW + ncW + obsW + 10, y + 3);
 
       y += 12;
     }
@@ -446,13 +449,13 @@ export class PdfService {
 
     // Equipment 1 & 2
     doc.font('Helvetica-Bold').text('EQUIPO 1:', x + 5, y + 15);
-    doc.font('Helvetica').text('ESTACIÓN TOTAL / NIVEL ÓPTICO', x + 50, y + 15);
-    doc.font('Helvetica-Bold').text('CALIBRACIÓN:', x + 200, y + 15);
+    doc.font('Helvetica').text('ESTACIÃ“N TOTAL / NIVEL Ã“PTICO', x + 50, y + 15);
+    doc.font('Helvetica-Bold').text('CALIBRACIÃ“N:', x + 200, y + 15);
     doc.font('Helvetica').text('[X] SI   [ ] NO', x + 260, y + 15);
 
     doc.font('Helvetica-Bold').text('EQUIPO 2:', x + 5, y + 27);
-    doc.font('Helvetica').text('PRISMA / MIRA TOPOGRÁFICA', x + 50, y + 27);
-    doc.font('Helvetica-Bold').text('N° CERTIFICADO:', x + 200, y + 27);
+    doc.font('Helvetica').text('PRISMA / MIRA TOPOGRÃFICA', x + 50, y + 27);
+    doc.font('Helvetica-Bold').text('NÂ° CERTIFICADO:', x + 200, y + 27);
     doc.font('Helvetica').text('CERT-TOP-2026-081', x + 270, y + 27);
 
     // Coordinates grid snippet
@@ -476,26 +479,26 @@ export class PdfService {
     doc.fillColor('#000000').strokeColor('#000000').lineWidth(0.75);
     const meas = (key: string) => this.getMeasurement(protocol, key);
 
-    // 1. INSPECCIÓN PREVIA AL VACIADO
+    // 1. INSPECCIÃ“N PREVIA AL VACIADO
     doc.rect(x, y, width, 12).fillAndStroke('#F1F5F9', '#000000');
-    doc.fillColor('#000000').fontSize(6.5).font('Helvetica-Bold').text('1.- INSPECCIÓN PREVIA AL VACIADO:', x + 5, y + 3);
+    doc.fillColor('#000000').fontSize(6.5).font('Helvetica-Bold').text('1.- INSPECCIÃ“N PREVIA AL VACIADO:', x + 5, y + 3);
     y += 12;
 
     const prePourItems = [
-      { order: '1.1', text: '¿Se cuenta con diseño de mezcla aprobado por la Supervisión?' },
-      { order: '1.2', text: '¿La superficie del solado está limpio, libre de tierra, raíces y arena?' },
-      { order: '1.3', text: '¿El acero de refuerzo se encuentra limpio, libre de lubricantes y óxidos?' },
-      { order: '1.4', text: '¿La posición del acero de refuerzo y el encofrado ha sido verificado por el topógrafo?' },
-      { order: '1.5', text: '¿El espesor de recubrimiento de concreto cumple con lo indicado según ET?' },
-      { order: '1.6', text: '¿Se encuentra con una referencia para determinar el nivel de llenado de concreto?' },
-      { order: '1.7', text: '¿Se ha verificado la conformidad de las juntas?' },
-      { order: '1.8', text: '¿Se ha verificado la conformidad de los recubrimientos mínimos?' }
+      { order: '1.1', text: 'Â¿Se cuenta con diseÃ±o de mezcla aprobado por la SupervisiÃ³n?' },
+      { order: '1.2', text: 'Â¿La superficie del solado estÃ¡ limpio, libre de tierra, raÃ­ces y arena?' },
+      { order: '1.3', text: 'Â¿El acero de refuerzo se encuentra limpio, libre de lubricantes y Ã³xidos?' },
+      { order: '1.4', text: 'Â¿La posiciÃ³n del acero de refuerzo y el encofrado ha sido verificado por el topÃ³grafo?' },
+      { order: '1.5', text: 'Â¿El espesor de recubrimiento de concreto cumple con lo indicado segÃºn ET?' },
+      { order: '1.6', text: 'Â¿Se encuentra con una referencia para determinar el nivel de llenado de concreto?' },
+      { order: '1.7', text: 'Â¿Se ha verificado la conformidad de las juntas?' },
+      { order: '1.8', text: 'Â¿Se ha verificado la conformidad de los recubrimientos mÃ­nimos?' }
     ];
 
     doc.rect(x, y, width, 12).stroke();
     doc.fontSize(6).font('Helvetica-Bold');
-    doc.text('Ítem', x + 4, y + 3);
-    doc.text('Descripción de la Verificación', x + 30, y + 3);
+    doc.text('Ãtem', x + 4, y + 3);
+    doc.text('DescripciÃ³n de la VerificaciÃ³n', x + 30, y + 3);
     doc.text('Si', x + 420, y + 3);
     doc.text('No', x + 455, y + 3);
     doc.text('N/A', x + 490, y + 3);
@@ -516,11 +519,11 @@ export class PdfService {
 
     // Gate question verbatim
     doc.rect(x, y, width, 12).stroke();
-    doc.fontSize(6).font('Helvetica-Bold').text('¿Las condiciones están dadas para iniciar el concretado?', x + 30, y + 3);
+    doc.fontSize(6).font('Helvetica-Bold').text('Â¿Las condiciones estÃ¡n dadas para iniciar el concretado?', x + 30, y + 3);
     doc.text('[X] Si    [ ] No', x + 420, y + 3);
     y += 14;
 
-    // 2. TIPO DE CONCRETO Y COLOCACIÓN (verbatim labels from 04. PAVIMENTO_CONCRETO_MI.xlsx)
+    // 2. TIPO DE CONCRETO Y COLOCACIÃ“N (verbatim labels from 04. PAVIMENTO_CONCRETO_MI.xlsx)
     const proc = meas('procedencia');   // 'hecho_en_obra' | 'premezclado'
     const coloc = meas('colocacion');   // 'directo'
     const acabado = meas('acabado');    // 'caravista' | 'otro'
@@ -528,17 +531,17 @@ export class PdfService {
     const mark = (cond: boolean) => (cond ? '[X]' : '[ ]');
 
     doc.rect(x, y, width, 46).stroke();
-    doc.fontSize(6).font('Helvetica-Bold').text('2.- TIPO DE CONCRETO Y COLOCACIÓN', x + 5, y + 3);
-    doc.fontSize(5.5).font('Helvetica').text('Marcar con un aspa dentro del cuadro según corresponda.', x + 5, y + 13);
+    doc.fontSize(6).font('Helvetica-Bold').text('2.- TIPO DE CONCRETO Y COLOCACIÃ“N', x + 5, y + 3);
+    doc.fontSize(5.5).font('Helvetica').text('Marcar con un aspa dentro del cuadro segÃºn corresponda.', x + 5, y + 13);
 
-    doc.fontSize(5.5).font('Helvetica-Bold').text('F´c diseño:', x + 5, y + 24);
+    doc.fontSize(5.5).font('Helvetica-Bold').text('FÂ´c diseÃ±o:', x + 5, y + 24);
     doc.font('Helvetica').text(designFc ? `${designFc} KG/CM2` : '', x + 52, y + 24);
 
     doc.font('Helvetica-Bold').text('PROCEDENCIA:', x + 170, y + 24);
     doc.font('Helvetica').text(`${mark(proc === 'hecho_en_obra')} Hecho en obra`, x + 245, y + 24);
     doc.text(`${mark(proc === 'premezclado')} Premezclado`, x + 350, y + 24);
 
-    doc.font('Helvetica-Bold').text('COLOCACIÓN:', x + 170, y + 35);
+    doc.font('Helvetica-Bold').text('COLOCACIÃ“N:', x + 170, y + 35);
     doc.font('Helvetica').text(`${mark(coloc === 'directo')} Directo`, x + 245, y + 35);
 
     doc.font('Helvetica-Bold').text('ACABADO:', x + 330, y + 35);
@@ -552,14 +555,14 @@ export class PdfService {
     y += 12;
 
     // --- 3a. Mixer groups: 2 side-by-side groups x 5 rows, verbatim columns ---
-    // Original columns per group: Numero de testigos elaborados | N° de Guía | Slump | Vol. (m3) | V°B°
+    // Original columns per group: Numero de testigos elaborados | NÂ° de GuÃ­a | Slump | Vol. (m3) | VÂ°BÂ°
     const groupW = (width - 8) / 2;
     const gCols = [
       { label: 'Numero de testigos elaborados', w: 78 },
-      { label: 'N° de Guía', w: 70 },
+      { label: 'NÂ° de GuÃ­a', w: 70 },
       { label: 'Slump', w: 40 },
       { label: 'Vol. (m3)', w: 40 },
-      { label: 'V°B°', w: 30 }
+      { label: 'VÂ°BÂ°', w: 30 }
     ];
     const renderMixerGroup = (gx: number, gy: number, groupTrucks: any[]) => {
       let cx = gx;
@@ -594,7 +597,7 @@ export class PdfService {
     renderMixerGroup(x + groupW + 8, y, trucks.slice(5, 10));
     y = g1y + 6;
 
-    // --- 3b. Cubicación: Elemento | Nro. de veces | Long | Base | Altura | Parcial | Total ---
+    // --- 3b. CubicaciÃ³n: Elemento | Nro. de veces | Long | Base | Altura | Parcial | Total ---
     // Parcial = veces x long x base x altura (PRODUCT formula); Total = SUM(parcial)
     const cubCols = [
       { label: 'Elemento', w: 145 },
@@ -640,10 +643,10 @@ export class PdfService {
       y += 10;
     }
 
-    // Cantidad de concreto teórico a colocar (= Total) / real (= SUM Vol.)
+    // Cantidad de concreto teÃ³rico a colocar (= Total) / real (= SUM Vol.)
     const totalVol = trucks.reduce((s: number, t: any) => s + (Number((t as any).vol_m3) || 0), 0);
     doc.fontSize(6).font('Helvetica');
-    doc.text('Cantidad de concreto teórico a colocar:', x + 5, y + 3);
+    doc.text('Cantidad de concreto teÃ³rico a colocar:', x + 5, y + 3);
     doc.font('Helvetica-Bold').text(totalParcial > 0 ? totalParcial.toFixed(2) : '', x + 220, y + 3);
     doc.font('Helvetica').text('M3', x + 280, y + 3);
     y += 12;
@@ -652,15 +655,15 @@ export class PdfService {
     doc.font('Helvetica').text('M3', x + 280, y + 3);
     y += 16;
 
-    // 4. VERIFICACIÓN POSTERIOR AL VACIADO
+    // 4. VERIFICACIÃ“N POSTERIOR AL VACIADO
     doc.rect(x, y, width, 10).fillAndStroke('#F1F5F9', '#000000');
-    doc.fillColor('#000000').fontSize(6).font('Helvetica-Bold').text('4.- VERIFICACIÓN POSTERIOR AL VACIADO:', x + 5, y + 2);
+    doc.fillColor('#000000').fontSize(6).font('Helvetica-Bold').text('4.- VERIFICACIÃ“N POSTERIOR AL VACIADO:', x + 5, y + 2);
     y += 10;
 
     const postPourItems = [
       'Acabado superficial de acuerdo a lo especificado',
       'Nivel de aplomado del elemento de acuerdo a lo especificado',
-      'Correcta posición final de los elementos embebidos',
+      'Correcta posiciÃ³n final de los elementos embebidos',
       'Curado de la estructura concretada adecuado'
     ];
 
@@ -677,6 +680,98 @@ export class PdfService {
     doc.fontSize(5.5).font('Helvetica-Bold').text('COMENTARIOS / OBSERVACIONES:', x + 5, y + 3);
     doc.font('Helvetica').text((protocol as any).notes || '', x + 130, y + 3, { width: width - 140, ellipsis: true });
     y += 18;
+
+    return y;
+  }
+
+  /**
+   * Renders the steel protocol body as an exact mirror of 03._PAVIMENTO_ACERO_MI.xlsx
+   * (sheet 'PR01 (2)'): 3 sections (MATERIAL, GENERAL, OTROS), 11 items verbatim,
+   * CUMPLE / NO CUMPLE / NO APLICA / ObservaciÃ³n columns.
+   * Spanish labels preserved exactly as in the original (no spelling corrections).
+   */
+  private renderSteelBody(doc: PDFKit.PDFDocument, x: number, y: number, width: number, protocolChecks: any[], docSpec: GoreDocSpec): number {
+    doc.fillColor('#000000').strokeColor('#000000').lineWidth(0.75);
+
+    const sections = [
+      {
+        num: '1', name: 'MATERIAL',
+        items: [
+          { order: '1.01', text: 'Calidad del acero / Fluencia corresponde con las EETT del proyecto', idx: 1 },
+          { order: '1.02', text: 'Â¿El acero instalado presenta certificado de calidad?', idx: 2 },
+        ]
+      },
+      {
+        num: '2', name: 'GENERAL',
+        items: [
+          { order: '2.01', text: 'Â¿Las armaduras de acero son del diÃ¡metro indicado en los planos Ã³ EETT?', idx: 3 },
+          { order: '2.02', text: 'Â¿Las intersecciones estÃ¡n aseguradas con alambre de amarre?', idx: 4 },
+          { order: '2.03', text: 'Â¿Se colocaron dados de concreto en la base de la armadura?', idx: 5 },
+          { order: '2.04', text: 'Â¿Se colocaron dados de concreto en los laterales de la armadura?', idx: 6 },
+          { order: '2.05', text: 'Â¿La armadura de acero esta ubicada verticalmente y horizontalmente segÃºn EETT y planos?', idx: 7 },
+          { order: '2.06', text: 'Â¿Las cotas del acero colocado, estan de acuerdo a los planos?', idx: 8 },
+          { order: '2.07', text: 'Â¿Las distancias entre las varillas son las que se indican en los planos de referencia?', idx: 9 },
+        ]
+      },
+      {
+        num: '3', name: 'OTROS',
+        items: [
+          { order: '3.01', text: 'Â¿Las armaduras estÃ¡n libre de oxidos y sustancias extraÃ±as en su superficie?', idx: 10 },
+          { order: '3.02', text: 'Â¿Todas las condiciones estÃ¡n dadas para dar conformidad a la armadura de acero?', idx: 11 },
+        ]
+      }
+    ];
+
+    // Column layout (mirrors Excel cols B/C/G/H/I/J)
+    const numW = 32;
+    const checkW = 42;
+    const obsW = 110;
+    const textW = width - numW - checkW * 3 - obsW;
+    const obsX = x + width - obsW;
+    const ncX = obsX - checkW;
+    const cX = ncX - checkW;
+    const cumpleX = cX - checkW;
+
+    const mark = (cond: boolean) => (cond ? '[X]' : '[ ]');
+
+    for (const sec of sections) {
+      // Section header row (verbatim: NÂ° | SECTION NAME | CUMPLE | NO CUMPLE | NO APLICA | ObservaciÃ³n)
+      doc.rect(x, y, width, 13).fillAndStroke('#F1F5F9', '#000000');
+      doc.fillColor('#000000').fontSize(7).font('Helvetica-Bold');
+      doc.text(sec.num, x + 4, y + 3, { width: numW - 8 });
+      doc.text(sec.name, x + numW + 4, y + 3, { width: textW - 8 });
+      doc.fontSize(5.5);
+      doc.text('CUMPLE', cumpleX, y + 3, { width: checkW, align: 'center' });
+      doc.text('NO CUMPLE', cX, y + 3, { width: checkW, align: 'center' });
+      doc.text('NO APLICA', ncX, y + 3, { width: checkW, align: 'center' });
+      doc.text('ObservaciÃ³n', obsX + 4, y + 3, { width: obsW - 8 });
+      y += 13;
+
+      for (const item of sec.items) {
+        const chk = protocolChecks.find((c: any) => c.item_order === item.idx);
+        const res = chk?.result;
+        const obs = chk?.observation || '';
+
+        doc.rect(x, y, width, 14).stroke();
+        // Vertical dividers
+        doc.moveTo(x + numW, y).lineTo(x + numW, y + 14).stroke();
+        doc.moveTo(cumpleX, y).lineTo(cumpleX, y + 14).stroke();
+        doc.moveTo(cX, y).lineTo(cX, y + 14).stroke();
+        doc.moveTo(ncX, y).lineTo(ncX, y + 14).stroke();
+        doc.moveTo(obsX, y).lineTo(obsX, y + 14).stroke();
+
+        doc.fontSize(6).font('Helvetica');
+        doc.text(item.order, x + 4, y + 4, { width: numW - 8 });
+        doc.fontSize(5.5).text(item.text, x + numW + 4, y + 2, { width: textW - 8, ellipsis: true });
+        doc.fontSize(6);
+        doc.text(mark(res === 'CUMPLE'), cumpleX, y + 4, { width: checkW, align: 'center' });
+        doc.text(mark(res === 'NO_CUMPLE'), cX, y + 4, { width: checkW, align: 'center' });
+        doc.text(mark(res === 'NO_APLICA'), ncX, y + 4, { width: checkW, align: 'center' });
+        doc.fontSize(5).text(obs, obsX + 4, y + 2, { width: obsW - 8, ellipsis: true });
+        y += 14;
+      }
+      y += 4;
+    }
 
     return y;
   }
@@ -701,7 +796,7 @@ export class PdfService {
     doc.text(docSpec.checklistStateLabels.pass, x + itemW + descW + 4, y + 4);
     doc.text(docSpec.checklistStateLabels.fail, x + itemW + descW + cW + 4, y + 4);
     doc.text(docSpec.checklistStateLabels.na, x + itemW + descW + cW + ncW + 4, y + 4);
-    doc.text('Observación', x + itemW + descW + cW + ncW + naW + 4, y + 4);
+    doc.text('ObservaciÃ³n', x + itemW + descW + cW + ncW + naW + 4, y + 4);
     y += 14;
 
     let itemsToRender: Array<{ order: string; section: string; text: string }> = [];
@@ -709,39 +804,39 @@ export class PdfService {
     if (activity === 'FORMWORK') {
       // Verbatim Encofrado: 1.01..1.04 and 2.01, 2.02, 2.04, 2.05 (2.03 is absent!)
       itemsToRender = [
-        { order: '1.01', section: '1. DESCRIPCION DE ACTIVIDAD', text: '¿Tipo de encofrado es adecuado para el tipo de estructura a concretar?' },
-        { order: '1.02', section: '1. DESCRIPCION DE ACTIVIDAD', text: '¿Los accesorios empleados son los adecuados?' },
-        { order: '1.03', section: '1. DESCRIPCION DE ACTIVIDAD', text: '¿Ubicación correcta de los elementos embebidos?' },
-        { order: '1.04', section: '1. DESCRIPCION DE ACTIVIDAD', text: '¿Los puntales son los adecuados?.' },
-        { order: '2.01', section: '2. VERIFICACIÓN DE LOS MATERIALES', text: 'Dimensiones del encofrado según los planos y las EETT.' },
-        { order: '2.02', section: '2. VERIFICACIÓN DE LOS MATERIALES', text: 'Distancias entre ejes y longitudes de encofrado.' },
-        { order: '2.04', section: '2. VERIFICACIÓN DE LOS MATERIALES', text: 'Verificación del alineamiento del encofrado.' },
-        { order: '2.05', section: '2. VERIFICACIÓN DE LOS MATERIALES', text: 'Verificación de la verticalidad o inclinación en los diferentes encofrados' }
+        { order: '1.01', section: '1. DESCRIPCION DE ACTIVIDAD', text: 'Â¿Tipo de encofrado es adecuado para el tipo de estructura a concretar?' },
+        { order: '1.02', section: '1. DESCRIPCION DE ACTIVIDAD', text: 'Â¿Los accesorios empleados son los adecuados?' },
+        { order: '1.03', section: '1. DESCRIPCION DE ACTIVIDAD', text: 'Â¿UbicaciÃ³n correcta de los elementos embebidos?' },
+        { order: '1.04', section: '1. DESCRIPCION DE ACTIVIDAD', text: 'Â¿Los puntales son los adecuados?.' },
+        { order: '2.01', section: '2. VERIFICACIÃ“N DE LOS MATERIALES', text: 'Dimensiones del encofrado segÃºn los planos y las EETT.' },
+        { order: '2.02', section: '2. VERIFICACIÃ“N DE LOS MATERIALES', text: 'Distancias entre ejes y longitudes de encofrado.' },
+        { order: '2.04', section: '2. VERIFICACIÃ“N DE LOS MATERIALES', text: 'VerificaciÃ³n del alineamiento del encofrado.' },
+        { order: '2.05', section: '2. VERIFICACIÃ“N DE LOS MATERIALES', text: 'VerificaciÃ³n de la verticalidad o inclinaciÃ³n en los diferentes encofrados' }
       ];
     } else if (activity === 'STEEL') {
       // Verbatim Acero: 1.01..1.02, 2.01..2.07, 3.01..3.02
       itemsToRender = [
         { order: '1.01', section: '1. MATERIAL', text: 'Calidad del acero / Fluencia corresponde con las EETT del proyecto' },
-        { order: '1.02', section: '1. MATERIAL', text: '¿El acero instalado presenta certificado de calidad?' },
-        { order: '2.01', section: '2. GENERAL', text: '¿Las armaduras de acero son del diámetro indicado en los planos ó EETT?' },
-        { order: '2.02', section: '2. GENERAL', text: '¿Las intersecciones están aseguradas con alambre de amarre?' },
-        { order: '2.03', section: '2. GENERAL', text: '¿Se colocaron dados de concreto en la base de la armadura?' },
-        { order: '2.04', section: '2. GENERAL', text: '¿Se colocaron dados de concreto en los laterales de la armadura?' },
-        { order: '2.05', section: '2. GENERAL', text: '¿La armadura de acero esta ubicada verticalmente y horizontalmente según EETT y planos?' },
-        { order: '2.06', section: '2. GENERAL', text: '¿Las cotas del acero colocado, estan de acuerdo a los planos?' },
-        { order: '2.07', section: '2. GENERAL', text: '¿Las distancias entre las varillas son las que se indican en los planos de referencia?' },
-        { order: '3.01', section: '3. OTROS', text: '¿Las armaduras están libre de oxidos y sustancias extrañas en su superficie?' },
-        { order: '3.02', section: '3. OTROS', text: '¿Todas las condiciones están dadas para dar conformidad a la armadura de acero?' }
+        { order: '1.02', section: '1. MATERIAL', text: 'Â¿El acero instalado presenta certificado de calidad?' },
+        { order: '2.01', section: '2. GENERAL', text: 'Â¿Las armaduras de acero son del diÃ¡metro indicado en los planos Ã³ EETT?' },
+        { order: '2.02', section: '2. GENERAL', text: 'Â¿Las intersecciones estÃ¡n aseguradas con alambre de amarre?' },
+        { order: '2.03', section: '2. GENERAL', text: 'Â¿Se colocaron dados de concreto en la base de la armadura?' },
+        { order: '2.04', section: '2. GENERAL', text: 'Â¿Se colocaron dados de concreto en los laterales de la armadura?' },
+        { order: '2.05', section: '2. GENERAL', text: 'Â¿La armadura de acero esta ubicada verticalmente y horizontalmente segÃºn EETT y planos?' },
+        { order: '2.06', section: '2. GENERAL', text: 'Â¿Las cotas del acero colocado, estan de acuerdo a los planos?' },
+        { order: '2.07', section: '2. GENERAL', text: 'Â¿Las distancias entre las varillas son las que se indican en los planos de referencia?' },
+        { order: '3.01', section: '3. OTROS', text: 'Â¿Las armaduras estÃ¡n libre de oxidos y sustancias extraÃ±as en su superficie?' },
+        { order: '3.02', section: '3. OTROS', text: 'Â¿Todas las condiciones estÃ¡n dadas para dar conformidad a la armadura de acero?' }
       ];
     } else {
       // Compaction / generic
       itemsToRender = [
-        { order: '1.1', section: '1. MATERIAL DE CANTERA', text: 'Material granular libre de sobretamaños y materia orgánica' },
+        { order: '1.1', section: '1. MATERIAL DE CANTERA', text: 'Material granular libre de sobretamaÃ±os y materia orgÃ¡nica' },
         { order: '1.2', section: '1. MATERIAL DE CANTERA', text: 'Certificado de ensayo Proctor Modificado vigente en laboratorio' },
-        { order: '2.1', section: '2. CONFORMACIÓN', text: 'Espesor de capa compactada según especificación (20/25 cm)' },
-        { order: '2.2', section: '2. CONFORMACIÓN', text: 'Humedad de compactación dentro del rango óptimo (±1.5%)' },
-        { order: '3.1', section: '3. CONTROL DENSIDAD IN-SITU', text: 'Grado de compactación alcanza exigencia (≥100% calzada / ≥95% veredas)' },
-        { order: '3.2', section: '3. CONTROL DENSIDAD IN-SITU', text: 'Frecuencia mínima: 6 determinaciones por cada 250 m²' }
+        { order: '2.1', section: '2. CONFORMACIÃ“N', text: 'Espesor de capa compactada segÃºn especificaciÃ³n (20/25 cm)' },
+        { order: '2.2', section: '2. CONFORMACIÃ“N', text: 'Humedad de compactaciÃ³n dentro del rango Ã³ptimo (Â±1.5%)' },
+        { order: '3.1', section: '3. CONTROL DENSIDAD IN-SITU', text: 'Grado de compactaciÃ³n alcanza exigencia (â‰¥100% calzada / â‰¥95% veredas)' },
+        { order: '3.2', section: '3. CONTROL DENSIDAD IN-SITU', text: 'Frecuencia mÃ­nima: 6 determinaciones por cada 250 mÂ²' }
       ];
     }
 
@@ -811,9 +906,9 @@ export class PdfService {
       // 5 boxes in 2 tiers
       const tier1Roles = [
         'RESIDENTE DE OBRA',
-        'ESPECIALISTA DE CALIDAD  EJECUCIÒN',
+        'ESPECIALISTA DE CALIDAD  EJECUCIÃ’N',
         'SUPERVISOR DE OBRA',
-        'ESTRUCTURAS - SUPERVISIÒN'
+        'ESTRUCTURAS - SUPERVISIÃ’N'
       ];
       const boxW = (width - 15) / 4;
       const boxH = 46;
@@ -834,7 +929,7 @@ export class PdfService {
       const t2W = 160;
       const t2X = x + (width - t2W) / 2;
       doc.rect(t2X, y, t2W, 36).stroke();
-      doc.fontSize(5.2).font('Helvetica-Bold').text('ESPECIALISTA DE CALIDAD  SUPERVISIÓN', t2X + 2, y + 3, { width: t2W - 4, align: 'center' });
+      doc.fontSize(5.2).font('Helvetica-Bold').text('ESPECIALISTA DE CALIDAD  SUPERVISIÃ“N', t2X + 2, y + 3, { width: t2W - 4, align: 'center' });
       doc.moveTo(t2X + 15, y + 26).lineTo(t2X + t2W - 15, y + 26).stroke();
       doc.fontSize(4.5).font('Helvetica').text('FIRMA Y SELLO', t2X, y + 28, { width: t2W, align: 'center' });
       y += 42;
@@ -897,14 +992,14 @@ export class PdfService {
     // Pilot legal caveat watermark / header banner
     doc.rect(x, y, width, 22).fillAndStroke('#FEF3C7', '#D97706');
     doc.fillColor('#92400E').fontSize(8).font('Helvetica-Bold').text(
-      'ANEXO TÉCNICO DIGITAL — SISTEMA PROTOKOL (TRAZABILIDAD FORENSE)',
+      'ANEXO TÃ‰CNICO DIGITAL â€” SISTEMA PROTOKOL (TRAZABILIDAD FORENSE)',
       x, y + 6, { width, align: 'center' }
     );
     y += 28;
 
     // Pilot notice
     doc.fontSize(6).font('Helvetica-Oblique').fillColor('#666666').text(
-      'AVISO LEGAL: Este anexo contiene los metadatos digitales e inmutables generados por la plataforma PROTOKOL en campo. Los formatos de la página principal son réplica fiel de los expedientes físicos de obra del Gobierno Regional de Ayacucho.',
+      'AVISO LEGAL: Este anexo contiene los metadatos digitales e inmutables generados por la plataforma PROTOKOL en campo. Los formatos de la pÃ¡gina principal son rÃ©plica fiel de los expedientes fÃ­sicos de obra del Gobierno Regional de Ayacucho.',
       x, y, { width }
     );
     y += 18;
@@ -914,7 +1009,7 @@ export class PdfService {
     doc.fillColor('#0F172A').fontSize(7).font('Helvetica-Bold').text('SELLO DIGITAL DE INTEGRIDAD (HMAC-SHA-256 / PROTOKOL R8):', x + 6, y + 5);
     doc.font('Courier').fontSize(6).fillColor('#0284C7').text(data.protocol.integrity_hash || 'SHA-256 PENDING', x + 6, y + 15, { width: width - 12 });
     doc.font('Helvetica').fontSize(5.5).fillColor('#64748B').text(
-      `ID Transacción: ${data.protocol.id} | Timestamp Servidor: ${data.protocol.server_received_at || 'S/T'} | Correlativo: ${data.correlativo}`,
+      `ID TransacciÃ³n: ${data.protocol.id} | Timestamp Servidor: ${data.protocol.server_received_at || 'S/T'} | Correlativo: ${data.correlativo}`,
       x + 6, y + 24
     );
     y += 38;
@@ -924,7 +1019,7 @@ export class PdfService {
     let verdictText = 'CONFORME / APROBADO (PASS)';
     if (data.protocol.verdict === 'PROVISIONAL_PASS') {
       verdictBg = '#F59E0B';
-      verdictText = 'APROBADO PROVISIONAL (Pendiente resultado de rotura a 28 días)';
+      verdictText = 'APROBADO PROVISIONAL (Pendiente resultado de rotura a 28 dÃ­as)';
     } else if (data.protocol.verdict === 'FAIL') {
       verdictBg = '#EF4444';
       verdictText = `NO CONFORME (NC Registrada: ${data.nonconformanceId || 'NC'})`;
@@ -935,12 +1030,12 @@ export class PdfService {
     y += 24;
 
     // Validation checks table (EG-2013 Criteria)
-    doc.fillColor('#0F172A').fontSize(7.5).font('Helvetica-Bold').text('EVALUACIÓN DE CRITERIOS NORMATIVOS (EG-2013):', x, y);
+    doc.fillColor('#0F172A').fontSize(7.5).font('Helvetica-Bold').text('EVALUACIÃ“N DE CRITERIOS NORMATIVOS (EG-2013):', x, y);
     y += 10;
 
     doc.rect(x, y, width, 14).fill('#E2E8F0');
     doc.fillColor('#1E293B').fontSize(6.5).font('Helvetica-Bold');
-    doc.text('Parámetro Evaluado', x + 6, y + 4);
+    doc.text('ParÃ¡metro Evaluado', x + 6, y + 4);
     doc.text('Criterio Exigido', x + 160, y + 4);
     doc.text('Valor Obtenido', x + 310, y + 4);
     doc.text('Resultado', x + 440, y + 4);
@@ -985,12 +1080,12 @@ export class PdfService {
     y += 10;
 
     // --- 4. GEOTAGGED PHOTO EVIDENCE ---
-    doc.fillColor('#0F172A').fontSize(7.5).font('Helvetica-Bold').text('EVIDENCIA FOTOGRÁFICA CON SELLO SATELITAL GPS:', x, y);
+    doc.fillColor('#0F172A').fontSize(7.5).font('Helvetica-Bold').text('EVIDENCIA FOTOGRÃFICA CON SELLO SATELITAL GPS:', x, y);
     y += 10;
 
     if (data.photos.length === 0) {
       doc.rect(x, y, width, 40).fillAndStroke('#F8FAFC', '#E2E8F0');
-      doc.fillColor('#94A3B8').fontSize(7).font('Helvetica').text('No se adjuntaron fotografías en este registro.', x + 10, y + 15, { align: 'center', width: width - 20 });
+      doc.fillColor('#94A3B8').fontSize(7).font('Helvetica').text('No se adjuntaron fotografÃ­as en este registro.', x + 10, y + 15, { align: 'center', width: width - 20 });
       y += 45;
     } else {
       let px = x;
@@ -1016,7 +1111,7 @@ export class PdfService {
 
     // Annex Footer
     doc.fontSize(5.5).font('Helvetica').fillColor('#64748B').text(
-      `Registro inmutable generado por PROTOKOL Core v2.4 · Directiva N° 017-2023-CG/GMPL INFOBRAS / OSCE`,
+      `Registro inmutable generado por PROTOKOL Core v2.4 Â· Directiva NÂ° 017-2023-CG/GMPL INFOBRAS / OSCE`,
       x, 790, { width, align: 'center' }
     );
   }
@@ -1028,7 +1123,7 @@ export class PdfService {
     const project = this.db.prepare(`SELECT * FROM projects WHERE id = ?`).get(projectId) as unknown as ProjectRecord | undefined;
     const projectName = project?.name || projectId;
     const contractNumber = project?.contract_number || 'N/A';
-    const entity = project?.entity || 'Entidad Pública';
+    const entity = project?.entity || 'Entidad PÃºblica';
 
     const protocols = this.db.prepare(`
       SELECT * FROM protocols WHERE project_id = ? ORDER BY chainage ASC, panel ASC
@@ -1055,7 +1150,7 @@ export class PdfService {
       doc.fontSize(14).font('Helvetica').text('REGISTRO OFICIAL DE PROTOCOLOS Y ENSAYOS', { align: 'center' });
       doc.moveDown(2);
       doc.fillColor('#B45309').fontSize(13).font('Helvetica-Bold')
-        .text('DOCUMENTO PILOTO — SIN VALIDEZ LEGAL', { align: 'center' });
+        .text('DOCUMENTO PILOTO â€” SIN VALIDEZ LEGAL', { align: 'center' });
       doc.fillColor('#0F172A');
       doc.moveDown(4);
 
@@ -1066,14 +1161,14 @@ export class PdfService {
       doc.fontSize(10).font('Helvetica').text(`ENTIDAD: ${entity}`, { align: 'center' });
       doc.moveDown(4);
 
-      doc.fontSize(12).font('Helvetica-Bold').text('RESUMEN EJECUTIVO PARA VALORIZACIÓN', { align: 'center' });
+      doc.fontSize(12).font('Helvetica-Bold').text('RESUMEN EJECUTIVO PARA VALORIZACIÃ“N', { align: 'center' });
       doc.fontSize(10).font('Helvetica').text(`Protocolos Registrados: ${protocols.length}`, { align: 'center' });
       doc.fontSize(10).font('Helvetica').text(`No Conformidades Abiertas: ${openNcs.length}`, { align: 'center' });
-      doc.fontSize(10).font('Helvetica').text(`Fecha de Emisión: ${new Date().toLocaleDateString('es-PE')}`, { align: 'center' });
+      doc.fontSize(10).font('Helvetica').text(`Fecha de EmisiÃ³n: ${new Date().toLocaleDateString('es-PE')}`, { align: 'center' });
 
       // Protocols index
       doc.addPage();
-      doc.fillColor('#0F172A').fontSize(14).font('Helvetica-Bold').text('ÍNDICE DE PROTOCOLOS DE CONTROL', 40, 40);
+      doc.fillColor('#0F172A').fontSize(14).font('Helvetica-Bold').text('ÃNDICE DE PROTOCOLOS DE CONTROL', 40, 40);
       doc.moveDown(1);
 
       let y = 70;
@@ -1082,7 +1177,7 @@ export class PdfService {
       doc.text('ID PROTOCOLO', 45, y + 6);
       doc.text('ACTIVIDAD', 170, y + 6);
       doc.text('PROGRESIVA', 260, y + 6);
-      doc.text('PAÑO', 340, y + 6);
+      doc.text('PAÃ‘O', 340, y + 6);
       doc.text('VEREDICTO', 430, y + 6);
 
       y += 20;
@@ -1119,7 +1214,7 @@ export class PdfService {
     const outputPath = path.join(config.pdfDir, filename);
 
     const project = this.db.prepare(`SELECT * FROM projects WHERE id = ?`).get(projectId) as unknown as ProjectRecord | undefined;
-    const projectName = project?.name || '“MEJORAMIENTO Y AMPLIACIÓN DEL SERVICIO DE TRANSITABILIDAD...”';
+    const projectName = project?.name || 'â€œMEJORAMIENTO Y AMPLIACIÃ“N DEL SERVICIO DE TRANSITABILIDAD...â€';
 
     const cylinders = cylindersData || this.db.prepare(`
       SELECT c.*, p.chainage, p.panel, p.recorded_at
@@ -1149,8 +1244,8 @@ export class PdfService {
       doc.fontSize(12).font('Helvetica-Bold').text('CONTROL DE ROTURAS DE PROBETA', startX + 140, y + 14, { width: 460, align: 'center' });
 
       doc.rect(startX + 600, y, pageWidth - 600, 42).stroke('#000000');
-      doc.fontSize(7).font('Helvetica-Bold').text('Código: SGC-CRP-2026', startX + 608, y + 8);
-      doc.text('Revisión: ---', startX + 608, y + 18);
+      doc.fontSize(7).font('Helvetica-Bold').text('CÃ³digo: SGC-CRP-2026', startX + 608, y + 8);
+      doc.text('RevisiÃ³n: ---', startX + 608, y + 18);
       doc.text('Fecha: JULIO 2026', startX + 608, y + 28);
       y += 48;
 
@@ -1162,16 +1257,16 @@ export class PdfService {
 
       // 10-Column Data Grid
       const cols = [
-        { label: 'CÓDIGO DE PROBETA', w: 85 },
-        { label: 'UBICACIÓN', w: 65 },
+        { label: 'CÃ“DIGO DE PROBETA', w: 85 },
+        { label: 'UBICACIÃ“N', w: 65 },
         { label: 'ESTRUCTURA / ELEM.', w: 90 },
-        { label: "F'C (kg/cm²)", w: 65 },
+        { label: "F'C (kg/cmÂ²)", w: 65 },
         { label: 'F. MUESTREO', w: 65 },
         { label: 'EDAD', w: 45 },
         { label: 'F. ROTURA', w: 65 },
-        { label: "F'C A 'x' DÍAS", w: 75 },
+        { label: "F'C A 'x' DÃAS", w: 75 },
         { label: "RESISTENCIA (%)", w: 75 },
-        { label: 'DESCRIPCIÓN', w: 152 }
+        { label: 'DESCRIPCIÃ“N', w: 152 }
       ];
 
       doc.rect(startX, y, pageWidth, 16).fillAndStroke('#F1F5F9', '#000000');
@@ -1199,12 +1294,12 @@ export class PdfService {
         let rx = startX;
         doc.text(r.cylinder_code || '---', rx + 2, y + 4, { width: cols[0].w - 4, align: 'center' }); rx += cols[0].w;
         doc.text(r.chainage || r.panel || '0+138', rx + 2, y + 4, { width: cols[1].w - 4, align: 'center' }); rx += cols[1].w;
-        doc.text(r.structure || 'PAÑO DE PAVIMENTO', rx + 2, y + 4, { width: cols[2].w - 4, align: 'center' }); rx += cols[2].w;
+        doc.text(r.structure || 'PAÃ‘O DE PAVIMENTO', rx + 2, y + 4, { width: cols[2].w - 4, align: 'center' }); rx += cols[2].w;
         doc.text(`${r.design_fc || 280}`, rx + 2, y + 4, { width: cols[3].w - 4, align: 'center' }); rx += cols[3].w;
         doc.text(this.formatDate(r.cast_date), rx + 2, y + 4, { width: cols[4].w - 4, align: 'center' }); rx += cols[4].w;
         doc.text(`${r.age_days || 28} d`, rx + 2, y + 4, { width: cols[5].w - 4, align: 'center' }); rx += cols[5].w;
         doc.text(this.formatDate(r.break_date), rx + 2, y + 4, { width: cols[6].w - 4, align: 'center' }); rx += cols[6].w;
-        doc.text(r.strength_kgcm2 ? `${r.strength_kgcm2} kg/cm²` : '---', rx + 2, y + 4, { width: cols[7].w - 4, align: 'center' }); rx += cols[7].w;
+        doc.text(r.strength_kgcm2 ? `${r.strength_kgcm2} kg/cmÂ²` : '---', rx + 2, y + 4, { width: cols[7].w - 4, align: 'center' }); rx += cols[7].w;
         doc.text(r.pct ? `${r.pct}%` : (r.strength_kgcm2 ? `${((r.strength_kgcm2 / (r.design_fc || 280)) * 100).toFixed(1)}%` : '---'), rx + 2, y + 4, { width: cols[8].w - 4, align: 'center' }); rx += cols[8].w;
         doc.text(r.desc || r.notes || 'ENSAYO CONFORME', rx + 4, y + 4, { width: cols[9].w - 8 });
 
