@@ -35,27 +35,27 @@ export function renderHomeView(container, session, onSelectActivity, onOpenStatu
     </div>
 
     <div class="activity-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px;">
-      <!-- 1. COMPACTION -->
-      <button class="activity-card" id="btn-act-compaction">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
-          <div class="activity-icon" style="margin-bottom: 0;">🚜</div>
-          <span style="font-size: 10px; font-weight: 800; background: #FEF3C7; color: #92400E; padding: 2px 6px; border-radius: 4px;">NORMA EG-2013</span>
-        </div>
-        <div class="activity-title">1. COMPACTACIÓN DE SUELOS</div>
-        <div class="activity-desc">${t('home.act_compaction_desc')}</div>
-      </button>
-
-      <!-- 2. SURVEY -->
+      <!-- 1. SURVEY (Topografía) -->
       <button class="activity-card" id="btn-act-survey">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
           <div class="activity-icon" style="margin-bottom: 0;">📐</div>
           <span style="font-size: 10px; font-weight: 800; background: #E0F2FE; color: #0369A1; padding: 2px 6px; border-radius: 4px;">GCO-PVT-2026 • Rev. 01</span>
         </div>
-        <div class="activity-title">2. TOPOGRAFÍA Y TRAZO</div>
+        <div class="activity-title">1. TOPOGRAFÍA Y TRAZO</div>
         <div class="activity-desc">${t('home.act_survey_desc')}</div>
       </button>
 
-      <!-- 3. STEEL -->
+      <!-- 2. FORMWORK (Encofrado) -->
+      <button class="activity-card" id="btn-act-formwork">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+          <div class="activity-icon" style="margin-bottom: 0;">🪵</div>
+          <span style="font-size: 10px; font-weight: 800; background: #DCFCE7; color: #15803D; padding: 2px 6px; border-radius: 4px;">GDC-PDE-2026 • Versión 001</span>
+        </div>
+        <div class="activity-title">2. ENCOFRADO Y DESENCOFRADO</div>
+        <div class="activity-desc">${t('home.act_formwork_desc')}</div>
+      </button>
+
+      <!-- 3. STEEL (Acero) -->
       <button class="activity-card" id="btn-act-steel">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
           <div class="activity-icon" style="margin-bottom: 0;">🔩</div>
@@ -65,23 +65,13 @@ export function renderHomeView(container, session, onSelectActivity, onOpenStatu
         <div class="activity-desc">${t('home.act_steel_desc')}</div>
       </button>
 
-      <!-- 4. FORMWORK -->
-      <button class="activity-card" id="btn-act-formwork">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
-          <div class="activity-icon" style="margin-bottom: 0;">🪵</div>
-          <span style="font-size: 10px; font-weight: 800; background: #DCFCE7; color: #15803D; padding: 2px 6px; border-radius: 4px;">GDC-PDE-2026 • Versión 001</span>
-        </div>
-        <div class="activity-title">4. ENCOFRADO Y DESENCOFRADO</div>
-        <div class="activity-desc">${t('home.act_formwork_desc')}</div>
-      </button>
-
-      <!-- 5. CONCRETE -->
+      <!-- 4. CONCRETE (Pavimento) -->
       <button class="activity-card" id="btn-act-concrete">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
           <div class="activity-icon" style="margin-bottom: 0;">🏗️</div>
           <span style="font-size: 10px; font-weight: 800; background: #FEE2E2; color: #B91C1C; padding: 2px 6px; border-radius: 4px;">GDC-PCC-2026 • Versión 001</span>
         </div>
-        <div class="activity-title">5. CONCRETO (PAVIMENTO / ESTRUCTURAS)</div>
+        <div class="activity-title">4. CONCRETO (PAVIMENTO RÍGIDO)</div>
         <div class="activity-desc">${t('home.act_concrete_desc')}</div>
       </button>
     </div>
@@ -97,7 +87,6 @@ export function renderHomeView(container, session, onSelectActivity, onOpenStatu
     </div>
   `;
 
-  container.querySelector('#btn-act-compaction').addEventListener('click', () => onSelectActivity('COMPACTION'));
   container.querySelector('#btn-act-survey').addEventListener('click', () => onSelectActivity('SURVEY'));
   container.querySelector('#btn-act-steel').addEventListener('click', () => onSelectActivity('STEEL'));
   container.querySelector('#btn-act-formwork').addEventListener('click', () => onSelectActivity('FORMWORK'));
