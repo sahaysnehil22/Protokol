@@ -12,7 +12,7 @@ export interface GoreDocSpec {
   date: string;
   title: string;
   defaultPartida: string;
-  sigFamily: '4_BOX_PAVEMENT' | '5_BOX_SURVEY' | '4_BOX_LAB';
+  sigFamily: '4_BOX_PAVEMENT' | '5_BOX_PAVEMENT' | '5_BOX_SURVEY' | '4_BOX_LAB';
   checklistStateLabels: {
     pass: string;
     fail: string;
@@ -28,7 +28,7 @@ export const GORE_DOC_SPECS: Record<string, GoreDocSpec> = {
     date: '13/06/2026',
     title: 'PROTOCOLO DE ENCOFRADO',
     defaultPartida: 'ENCOFRADO Y DESENCOFRADO',
-    sigFamily: '4_BOX_PAVEMENT',
+    sigFamily: '5_BOX_PAVEMENT',
     checklistStateLabels: { pass: 'CUMPLE', fail: 'NO CUMPLE', na: 'NO APLICA' },
     isConfirmed: true
   },
@@ -38,7 +38,7 @@ export const GORE_DOC_SPECS: Record<string, GoreDocSpec> = {
     date: '13/06/2026',
     title: 'PROTOCOLO DE INSTALACION DE ACERO DE REFUERZO',
     defaultPartida: 'HABILITACION Y COLOCACION DE ACERO CORRUGADO PARA SOPORTE DOWELS',
-    sigFamily: '4_BOX_PAVEMENT',
+    sigFamily: '5_BOX_PAVEMENT',
     checklistStateLabels: { pass: 'CUMPLE', fail: 'NO CUMPLE', na: 'NO APLICA' },
     isConfirmed: true
   },
@@ -48,7 +48,7 @@ export const GORE_DOC_SPECS: Record<string, GoreDocSpec> = {
     date: '13/06/2026',
     title: 'PROTOCOLO DE COLOCACIÓN DE PAVIMENTO RÍGIDO',
     defaultPartida: "CONCRETO FC=280 KG/CM2, EN PAVIMENTO RIGIDO E=0.25M",
-    sigFamily: '4_BOX_PAVEMENT',
+    sigFamily: '5_BOX_PAVEMENT',
     checklistStateLabels: { pass: 'Si', fail: 'No', na: 'N/A' },
     isConfirmed: true
   },
@@ -115,6 +115,20 @@ export class PdfService {
       }
     } catch {}
     return String(rawDate).substring(0, 10);
+  }
+
+  /**
+   * Read a value from protocol measurements (handles JSON string or object).
+   */
+  private getMeasurement(protocol: ProtocolRecord, key: string): any {
+    const m: any = (protocol as any).measurements;
+    if (!m) return undefined;
+    try {
+      const obj = typeof m === 'string' ? JSON.parse(m) : m;
+      return obj?.[key];
+    } catch {
+      return undefined;
+    }
   }
 
   /**
@@ -259,9 +273,12 @@ export class PdfService {
       doc.moveTo(startX, y + metaRowH * 2).lineTo(startX + pageWidth, y + metaRowH * 2).stroke();
       doc.moveTo(startX, y + metaRowH * 3).lineTo(startX + pageWidth, y + metaRowH * 3).stroke();
 
-      // Row 1: Obra
+      // Row 1: Obra + Fecha de liberación (verbatim K6 in the originals)
       doc.fontSize(6.5).font('Helvetica-Bold').text('Obra:', startX + 5, y + 4);
-      doc.font('Helvetica').fontSize(5.5).text(projectName, startX + 32, y + 4, { width: pageWidth - 40, height: metaRowH - 2, ellipsis: true });
+      doc.font('Helvetica').fontSize(5.5).text(projectName, startX + 32, y + 4, { width: 295, height: metaRowH - 2, ellipsis: true });
+      const fechaLiberacion = this.getMeasurement(params.protocol, 'fecha_liberacion');
+      doc.fontSize(6.5).font('Helvetica-Bold').text('Fecha de liberación:', startX + 340, y + 4);
+      doc.font('Helvetica').fontSize(6).text(fechaLiberacion ? this.formatDate(fechaLiberacion) : '', startX + 428, y + 4, { width: 90 });
 
       // Row 2: Ejecuta & Supervisa
       const r2Y = y + metaRowH;
@@ -300,7 +317,7 @@ export class PdfService {
       if (params.protocol.activity === 'SURVEY') {
         y = this.renderSurveyBody(doc, startX, y, pageWidth, protocolChecks, docSpec);
       } else if (params.protocol.activity === 'CONCRETE') {
-        y = this.renderConcreteBody(doc, startX, y, pageWidth, protocolChecks, trucks, docSpec);
+        y = this.renderConcreteBody(doc, startX, y, pageWidth, protocolChecks, trucks, docSpec, params.protocol);
       } else {
         // Encofrado, Acero, Compaction standard checklist grid
         y = this.renderStandardChecklistBody(doc, startX, y, pageWidth, protocolChecks, docSpec, params.protocol.activity);
@@ -315,7 +332,7 @@ export class PdfService {
       doc.fontSize(5.5).font('Helvetica').fillColor('#555555').text(
         `Formato oficial impreso · Registro de Calidad en Obra AY-728/AY-729 · Ref: ${params.protocol.id}`,
         startX,
-        805,
+        790,
         { width: pageWidth, align: 'center' }
       );
 
@@ -455,8 +472,9 @@ export class PdfService {
   /**
    * Renders Concreto specific multi-section body (Pre-vaciado, Tipo concreto, Mixer table, Post-vaciado).
    */
-  private renderConcreteBody(doc: PDFKit.PDFDocument, x: number, y: number, width: number, protocolChecks: any[], trucks: ConcreteTruckRecord[], docSpec: GoreDocSpec): number {
+  private renderConcreteBody(doc: PDFKit.PDFDocument, x: number, y: number, width: number, protocolChecks: any[], trucks: ConcreteTruckRecord[], docSpec: GoreDocSpec, protocol: ProtocolRecord): number {
     doc.fillColor('#000000').strokeColor('#000000').lineWidth(0.75);
+    const meas = (key: string) => this.getMeasurement(protocol, key);
 
     // 1. INSPECCIÓN PREVIA AL VACIADO
     doc.rect(x, y, width, 12).fillAndStroke('#F1F5F9', '#000000');
@@ -502,47 +520,137 @@ export class PdfService {
     doc.text('[X] Si    [ ] No', x + 420, y + 3);
     y += 14;
 
-    // 2. TIPO DE CONCRETO Y COLOCACIÓN
-    doc.rect(x, y, width, 24).stroke();
-    doc.fontSize(6).font('Helvetica-Bold').text('2.- TIPO DE CONCRETO Y COLOCACIÓN (Marcar con aspa):', x + 5, y + 3);
-    doc.font('Helvetica').fontSize(5.5);
-    doc.text("F´c diseño: 280 KG/CM² (Pavimento e=0.25m)", x + 15, y + 13);
-    doc.text("PROCEDENCIA: [ ] Obra   [X] Premezclado", x + 175, y + 13);
-    doc.text("COLOCACIÓN: [X] Directo   [ ] Balde", x + 315, y + 13);
-    doc.text("ACABADO: [ ] Caravista   [X] Otro", x + 420, y + 13);
-    y += 26;
+    // 2. TIPO DE CONCRETO Y COLOCACIÓN (verbatim labels from 04. PAVIMENTO_CONCRETO_MI.xlsx)
+    const proc = meas('procedencia');   // 'hecho_en_obra' | 'premezclado'
+    const coloc = meas('colocacion');   // 'directo'
+    const acabado = meas('acabado');    // 'caravista' | 'otro'
+    const designFc = meas('design_fc');
+    const mark = (cond: boolean) => (cond ? '[X]' : '[ ]');
 
-    // 3. CONTROL DE CALIDAD POR MIXER (TABLE)
+    doc.rect(x, y, width, 46).stroke();
+    doc.fontSize(6).font('Helvetica-Bold').text('2.- TIPO DE CONCRETO Y COLOCACIÓN', x + 5, y + 3);
+    doc.fontSize(5.5).font('Helvetica').text('Marcar con un aspa dentro del cuadro según corresponda.', x + 5, y + 13);
+
+    doc.fontSize(5.5).font('Helvetica-Bold').text('F´c diseño:', x + 5, y + 24);
+    doc.font('Helvetica').text(designFc ? `${designFc} KG/CM2` : '', x + 52, y + 24);
+
+    doc.font('Helvetica-Bold').text('PROCEDENCIA:', x + 170, y + 24);
+    doc.font('Helvetica').text(`${mark(proc === 'hecho_en_obra')} Hecho en obra`, x + 245, y + 24);
+    doc.text(`${mark(proc === 'premezclado')} Premezclado`, x + 350, y + 24);
+
+    doc.font('Helvetica-Bold').text('COLOCACIÓN:', x + 170, y + 35);
+    doc.font('Helvetica').text(`${mark(coloc === 'directo')} Directo`, x + 245, y + 35);
+
+    doc.font('Helvetica-Bold').text('ACABADO:', x + 330, y + 35);
+    doc.font('Helvetica').text(`${mark(acabado === 'caravista')} Caravista`, x + 390, y + 35);
+    doc.text(`${mark(acabado === 'otro')} Otro: ______`, x + 462, y + 35, { width: 58 });
+    y += 48;
+
+    // 3. CONTROL DE CALIDAD (verbatim structure from 04. PAVIMENTO_CONCRETO_MI.xlsx)
     doc.rect(x, y, width, 12).fillAndStroke('#F1F5F9', '#000000');
-    doc.fillColor('#000000').fontSize(6.5).font('Helvetica-Bold').text('3.- CONTROL DE CALIDAD — REGISTRO POR MIXER:', x + 5, y + 3);
+    doc.fillColor('#000000').fontSize(6.5).font('Helvetica-Bold').text('3.- CONTROL DE CALIDAD.', x + 5, y + 3);
     y += 12;
 
-    doc.rect(x, y, width, 12).stroke();
-    doc.fontSize(5.5).font('Helvetica-Bold');
-    doc.text('Mixer #', x + 4, y + 3);
-    doc.text('N° de Guía / Despacho', x + 40, y + 3);
-    doc.text('Slump (pulg)', x + 170, y + 3);
-    doc.text('Volumen (m³)', x + 250, y + 3);
-    doc.text('Probetas', x + 340, y + 3);
-    doc.text('V°B° Calidad', x + 430, y + 3);
-    y += 12;
-
-    const truckRows = trucks.length > 0 ? trucks.slice(0, 4) : [
-      { truck_number: 1, mixer_id: 'MIX-01', delivery_note: 'GR-TITAN-0412', slump: 4, slump_cm: 10, cylinders_cast: 4, slump_verdict: 'PASS' } as any
+    // --- 3a. Mixer groups: 2 side-by-side groups x 5 rows, verbatim columns ---
+    // Original columns per group: Numero de testigos elaborados | N° de Guía | Slump | Vol. (m3) | V°B°
+    const groupW = (width - 8) / 2;
+    const gCols = [
+      { label: 'Numero de testigos elaborados', w: 78 },
+      { label: 'N° de Guía', w: 70 },
+      { label: 'Slump', w: 40 },
+      { label: 'Vol. (m3)', w: 40 },
+      { label: 'V°B°', w: 30 }
     ];
+    const renderMixerGroup = (gx: number, gy: number, groupTrucks: any[]) => {
+      let cx = gx;
+      doc.fontSize(5).font('Helvetica-Bold');
+      for (const c of gCols) {
+        doc.rect(cx, gy, c.w, 12).stroke();
+        doc.fillColor('#000000').text(c.label, cx + 2, gy + 2, { width: c.w - 4 });
+        cx += c.w;
+      }
+      let ry = gy + 12;
+      for (let r = 0; r < 5; r++) {
+        const trk = groupTrucks[r];
+        cx = gx;
+        const cells: string[] = trk ? [
+          trk.cylinders_cast != null ? String(trk.cylinders_cast) : '',
+          trk.delivery_note || trk.mixer_id || '',
+          trk.slump ? String(trk.slump) : '',
+          (trk as any).vol_m3 != null ? String((trk as any).vol_m3) : '',
+          trk.slump_verdict ? (trk.slump_verdict === 'PASS' ? '[X]' : '[ ]') : ''
+        ] : ['', '', '', '', ''];
+        doc.fontSize(5.5).font('Helvetica');
+        for (let ci = 0; ci < gCols.length; ci++) {
+          doc.rect(cx, ry, gCols[ci].w, 10).stroke();
+          doc.fillColor('#000000').text(cells[ci], cx + 2, ry + 2, { width: gCols[ci].w - 4 });
+          cx += gCols[ci].w;
+        }
+        ry += 10;
+      }
+      return ry;
+    };
+    const g1y = renderMixerGroup(x, y, trucks.slice(0, 5));
+    renderMixerGroup(x + groupW + 8, y, trucks.slice(5, 10));
+    y = g1y + 6;
 
-    for (const trk of truckRows) {
-      doc.rect(x, y, width, 10).stroke();
-      doc.fontSize(5.5).font('Helvetica').text(`Camión ${trk.truck_number}`, x + 4, y + 2);
-      doc.text(`${trk.delivery_note || trk.mixer_id}`, x + 40, y + 2);
-      doc.text(trk.slump ? `${trk.slump}"` : (trk.slump_cm ? `${(trk.slump_cm/2.54).toFixed(1)}"` : '4"'), x + 170, y + 2);
-      doc.text('8.0 m³', x + 250, y + 2);
-      doc.text(`${trk.cylinders_cast || 4} testigos`, x + 340, y + 2);
-      doc.text(trk.slump_verdict === 'PASS' ? 'CONFORME' : 'OBSERVADO', x + 430, y + 2);
+    // --- 3b. Cubicación: Elemento | Nro. de veces | Long | Base | Altura | Parcial | Total ---
+    // Parcial = veces x long x base x altura (PRODUCT formula); Total = SUM(parcial)
+    const cubCols = [
+      { label: 'Elemento', w: 145 },
+      { label: 'Nro. de veces', w: 70 },
+      { label: 'Long', w: 60 },
+      { label: 'Base', w: 60 },
+      { label: 'Altura', w: 60 },
+      { label: 'Parcial', w: 65 },
+      { label: 'Total', w: 65 }
+    ];
+    let cx = x;
+    doc.fontSize(5.5).font('Helvetica-Bold');
+    for (const c of cubCols) {
+      doc.rect(cx, y, c.w, 12).stroke();
+      doc.fillColor('#000000').text(c.label, cx + 2, y + 3, { width: c.w - 4, align: 'center' });
+      cx += c.w;
+    }
+    y += 12;
+
+    const cubRows: any[] = meas('cubicacion') || [];
+    let totalParcial = 0;
+    for (let r = 0; r < 5; r++) {
+      const row = cubRows[r] || {};
+      const nums = [row.veces, row.long, row.base, row.altura].map((v: any) => (v === '' || v == null ? NaN : Number(v)));
+      const parcial = nums.every((n: number) => !isNaN(n)) ? nums[0] * nums[1] * nums[2] * nums[3] : NaN;
+      if (!isNaN(parcial)) totalParcial += parcial;
+      const cells = [
+        row.elemento || '',
+        row.veces ?? '',
+        row.long ?? '',
+        row.base ?? '',
+        row.altura ?? '',
+        isNaN(parcial) ? '' : parcial.toFixed(2),
+        ''
+      ];
+      cx = x;
+      doc.fontSize(5.5).font('Helvetica');
+      for (let ci = 0; ci < cubCols.length; ci++) {
+        doc.rect(cx, y, cubCols[ci].w, 10).stroke();
+        doc.fillColor('#000000').text(String(cells[ci]), cx + 2, y + 2, { width: cubCols[ci].w - 4, align: 'center' });
+        cx += cubCols[ci].w;
+      }
       y += 10;
     }
 
-    y += 2;
+    // Cantidad de concreto teórico a colocar (= Total) / real (= SUM Vol.)
+    const totalVol = trucks.reduce((s: number, t: any) => s + (Number((t as any).vol_m3) || 0), 0);
+    doc.fontSize(6).font('Helvetica');
+    doc.text('Cantidad de concreto teórico a colocar:', x + 5, y + 3);
+    doc.font('Helvetica-Bold').text(totalParcial > 0 ? totalParcial.toFixed(2) : '', x + 220, y + 3);
+    doc.font('Helvetica').text('M3', x + 280, y + 3);
+    y += 12;
+    doc.text('Cantidad de concreto real:', x + 5, y + 3);
+    doc.font('Helvetica-Bold').text(totalVol > 0 ? totalVol.toFixed(2) : '', x + 220, y + 3);
+    doc.font('Helvetica').text('M3', x + 280, y + 3);
+    y += 16;
 
     // 4. VERIFICACIÓN POSTERIOR AL VACIADO
     doc.rect(x, y, width, 10).fillAndStroke('#F1F5F9', '#000000');
@@ -564,10 +672,10 @@ export class PdfService {
       y += 9;
     }
 
-    // Comentarios
+    // Comentarios (from protocol notes; blank on the blank form)
     doc.rect(x, y, width, 14).stroke();
     doc.fontSize(5.5).font('Helvetica-Bold').text('COMENTARIOS / OBSERVACIONES:', x + 5, y + 3);
-    doc.font('Helvetica').text('Vaciado ejecutado con aditivo y vibrado continuo según especificación técnica.', x + 130, y + 3, { width: width - 140, ellipsis: true });
+    doc.font('Helvetica').text((protocol as any).notes || '', x + 130, y + 3, { width: width - 140, ellipsis: true });
     y += 18;
 
     return y;
@@ -668,10 +776,38 @@ export class PdfService {
   /**
    * Renders the official paper signature grid. Empty boxes ready for wet signing/stamping.
    */
-  private renderSignatureGrid(doc: PDFKit.PDFDocument, x: number, y: number, width: number, family: '4_BOX_PAVEMENT' | '5_BOX_SURVEY' | '4_BOX_LAB'): number {
+  private renderSignatureGrid(doc: PDFKit.PDFDocument, x: number, y: number, width: number, family: '4_BOX_PAVEMENT' | '5_BOX_PAVEMENT' | '5_BOX_SURVEY' | '4_BOX_LAB'): number {
     doc.fillColor('#000000').strokeColor('#000000').lineWidth(0.75);
 
-    if (family === '5_BOX_SURVEY') {
+    if (family === '5_BOX_PAVEMENT') {
+      // 5 boxes: 4 in a row + ESPECIALISTA DE CALIDAD-SUPERVISOR on a second row,
+      // verbatim from the pavement protocol originals (B64/E64/H64/K64 + B66)
+      const pavementRoles = [
+        'RESIDENTE DE OBRA',
+        'ESPECIALISTA DE CALIDAD',
+        'ESTRUCTURISTA-SUPERVISOR',
+        'SUPERVISOR DE OBRA'
+      ];
+      const boxW = (width - 15) / 4;
+      const boxH = 50;
+
+      for (let i = 0; i < 4; i++) {
+        const bx = x + i * (boxW + 5);
+        doc.rect(bx, y, boxW, boxH).stroke();
+        doc.fontSize(5.5).font('Helvetica-Bold').text(pavementRoles[i], bx + 2, y + 4, { width: boxW - 4, align: 'center' });
+        doc.moveTo(bx + 8, y + boxH - 14).lineTo(bx + boxW - 8, y + boxH - 14).stroke();
+        doc.fontSize(4.5).font('Helvetica').text('FIRMA Y SELLO', bx, y + boxH - 11, { width: boxW, align: 'center' });
+      }
+      y += boxH + 6;
+
+      // Second row: 5th box under the first column (verbatim B66)
+      doc.rect(x, y, boxW, boxH).stroke();
+      doc.fontSize(5.5).font('Helvetica-Bold').text('ESPECIALISTA DE CALIDAD-SUPERVISOR', x + 2, y + 4, { width: boxW - 4, align: 'center' });
+      doc.moveTo(x + 8, y + boxH - 14).lineTo(x + boxW - 8, y + boxH - 14).stroke();
+      doc.fontSize(4.5).font('Helvetica').text('FIRMA Y SELLO', x, y + boxH - 11, { width: boxW, align: 'center' });
+      y += boxH + 10;
+
+    } else if (family === '5_BOX_SURVEY') {
       // 5 boxes in 2 tiers
       const tier1Roles = [
         'RESIDENTE DE OBRA',
@@ -881,7 +1017,7 @@ export class PdfService {
     // Annex Footer
     doc.fontSize(5.5).font('Helvetica').fillColor('#64748B').text(
       `Registro inmutable generado por PROTOKOL Core v2.4 · Directiva N° 017-2023-CG/GMPL INFOBRAS / OSCE`,
-      x, 805, { width, align: 'center' }
+      x, 790, { width, align: 'center' }
     );
   }
 
