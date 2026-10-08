@@ -79,7 +79,7 @@ describe('GORE Ayacucho Official Inspection Protocols & PDF Verification (Annex 
     // Formwork
     expect(GORE_DOC_SPECS.FORMWORK.code).toBe('GDC-PDE-2026');
     expect(GORE_DOC_SPECS.FORMWORK.title).toBe('PROTOCOLO DE ENCOFRADO');
-    expect(GORE_DOC_SPECS.FORMWORK.sigFamily).toBe('4_BOX_PAVEMENT');
+    expect(GORE_DOC_SPECS.FORMWORK.sigFamily).toBe('5_BOX_PAVEMENT');
     expect(GORE_DOC_SPECS.FORMWORK.checklistStateLabels).toEqual({
       pass: 'CUMPLE',
       fail: 'NO CUMPLE',
@@ -89,7 +89,7 @@ describe('GORE Ayacucho Official Inspection Protocols & PDF Verification (Annex 
     // Steel
     expect(GORE_DOC_SPECS.STEEL.code).toBe('FO01PT03');
     expect(GORE_DOC_SPECS.STEEL.title).toBe('PROTOCOLO DE INSTALACION DE ACERO DE REFUERZO');
-    expect(GORE_DOC_SPECS.STEEL.sigFamily).toBe('4_BOX_PAVEMENT');
+    expect(GORE_DOC_SPECS.STEEL.sigFamily).toBe('5_BOX_PAVEMENT');
     expect(GORE_DOC_SPECS.STEEL.checklistStateLabels).toEqual({
       pass: 'CUMPLE',
       fail: 'NO CUMPLE',
@@ -100,7 +100,7 @@ describe('GORE Ayacucho Official Inspection Protocols & PDF Verification (Annex 
     expect(GORE_DOC_SPECS.CONCRETE.code).toBe('GDC-PCC-2026');
     expect(GORE_DOC_SPECS.CONCRETE.title).toBe('PROTOCOLO DE COLOCACIÓN DE PAVIMENTO RÍGIDO');
     expect(GORE_DOC_SPECS.CONCRETE.defaultPartida).toContain('E=0.25M'); // Fixed from e=0.20m to e=0.25m
-    expect(GORE_DOC_SPECS.CONCRETE.sigFamily).toBe('4_BOX_PAVEMENT');
+    expect(GORE_DOC_SPECS.CONCRETE.sigFamily).toBe('5_BOX_PAVEMENT');
     expect(GORE_DOC_SPECS.CONCRETE.checklistStateLabels).toEqual({
       pass: 'Si',
       fail: 'No',
