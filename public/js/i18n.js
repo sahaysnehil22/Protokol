@@ -12,7 +12,7 @@ const translations = {
     'nav.queued': '{count} EN COLA',
     'nav.lang_toggle': 'EN',
     'nav.projects': 'Proyectos',
-    'nav.new_project': '+ Nuevo Proyecto',
+    'nav.new_project': 'Nuevo Proyecto',
 
     // Project Portal View
     'portal.title': 'Proyectos de Infraestructura Vial',
@@ -37,8 +37,8 @@ const translations = {
     'home.act_steel_desc': 'Armadura de refuerzo, espaciamiento entre varillas y recubrimiento mínimo.',
     'home.act_formwork_title': 'ENCOFRADO Y DESENCOFRADO',
     'home.act_formwork_desc': 'Alineamiento, verticalidad, estanqueidad de juntas, desmoldante y apuntalamiento rígido.',
-    'home.btn_status_view': '📊 Vista de Estado del Especialista de Calidad →',
-    'home.btn_project_config': '📋 Información General del Proyecto →',
+    'home.btn_status_view': 'Vista de Estado del Especialista de Calidad',
+    'home.btn_project_config': 'Información General del Proyecto',
 
     // Identify View
     'identify.title': 'Acceso al Proyecto',
@@ -212,7 +212,7 @@ const translations = {
     'nav.queued': '{count} QUEUED',
     'nav.lang_toggle': 'ES',
     'nav.projects': 'Projects',
-    'nav.new_project': '+ New Project',
+    'nav.new_project': 'New Project',
 
     // Project Portal View
     'portal.title': 'Highway Infrastructure Projects',
@@ -237,8 +237,8 @@ const translations = {
     'home.act_steel_desc': 'Rebar placement, spacing tolerance, and minimum concrete cover.',
     'home.act_formwork_title': 'FORMWORK & STRIPPING',
     'home.act_formwork_desc': 'Alignment, plumbness, joint tightness, form release agent, and rigid shoring.',
-    'home.btn_status_view': '📊 Quality Manager Status View →',
-    'home.btn_project_config': '📋 General Project Information →',
+    'home.btn_status_view': 'Quality Manager Status View',
+    'home.btn_project_config': 'General Project Information',
 
     // Identify View
     'identify.title': 'Project Access',
