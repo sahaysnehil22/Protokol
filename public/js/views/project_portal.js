@@ -1,39 +1,35 @@
 // PROTOKOL — View: Project Portal (Landing Hub)
 // 2026-10-03: "my projects" dashboard (scope=mine), archive/restore with PIN.
 import { t } from '../i18n.js';
+import { icon } from '../icons.js';
 
 export async function renderProjectPortalView(container, onSelectProject, onOpenProjectSetup) {
   const deviceToken = localStorage.getItem('protokol_device_token') || 'dvc_pilot_qa_01';
 
   container.innerHTML = `
-    <div style="margin-bottom: 24px;">
-      <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
-        <div>
-          <h1 style="font-size: 22px; font-weight: 900; color: #0F172A; margin: 0;">
-            ${t('portal.title')}
-          </h1>
-          <p style="font-size: 13px; color: var(--color-text-secondary); margin: 4px 0 0 0;">
-            ${t('portal.subtitle')}
-          </p>
+    <div class="page-head">
+      <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 12px;">
+        <div style="flex: 1; min-width: 0;">
+          <h1>${t('portal.title')}</h1>
+          <p>${t('portal.subtitle')}</p>
         </div>
-        <button id="btn-portal-create" class="btn btn-primary" style="padding: 0 16px; height: 38px; min-height: 38px; font-size: 13px;">
+        <button id="btn-portal-create" class="btn btn-primary btn-sm" style="flex-shrink: 0;">
           ${t('nav.new_project')}
         </button>
       </div>
 
-      <div style="margin-top: 18px; display: flex; justify-content: flex-end;">
-        <button id="btn-toggle-archived" class="btn btn-outline" style="font-size: 12px; white-space: nowrap;">
-          📦 ${t('portal.show_archived')}
+      <div style="margin-top: 12px; display: flex; justify-content: flex-end;">
+        <button id="btn-toggle-archived" class="btn btn-outline btn-sm" style="width: auto;">
+          <span style="display: inline-flex; vertical-align: -3px; margin-right: 6px;">${icon('archive', 15)}</span>${t('portal.show_archived')}
         </button>
       </div>
     </div>
 
-    <div id="portal-projects-list" style="display: flex; flex-direction: column; gap: 14px;">
-      <div style="text-align: center; padding: 40px; color: var(--color-text-muted);">
-        <div style="font-size: 28px; animation: pulse 1s infinite;">⚙️</div>
-        <p style="margin-top: 8px; font-size: 13px;">Cargando proyectos...</p>
-      </div>
+    <div id="portal-projects-list" class="plain-list" style="display: none;"></div>
+    <div id="portal-loading" style="text-align: center; padding: 40px; color: var(--color-text-muted);">
+      <p style="margin-top: 8px; font-size: 13px;">Cargando proyectos...</p>
     </div>
+    <div id="portal-empty" style="display: none;"></div>
 
     <!-- Archive PIN modal -->
     <div id="archive-modal" style="display: none; position: fixed; inset: 0; background: rgba(15,23,42,0.5); z-index: 100; align-items: center; justify-content: center; padding: 20px;">
@@ -52,6 +48,8 @@ export async function renderProjectPortalView(container, onSelectProject, onOpen
   `;
 
   const projectsContainer = container.querySelector('#portal-projects-list');
+  const loadingEl = container.querySelector('#portal-loading');
+  const emptyEl = container.querySelector('#portal-empty');
   const createBtn = container.querySelector('#btn-portal-create');
   const toggleArchivedBtn = container.querySelector('#btn-toggle-archived');
   const modal = container.querySelector('#archive-modal');
@@ -81,24 +79,32 @@ export async function renderProjectPortalView(container, onSelectProject, onOpen
         res = await fetch('/api/projects');
         allProjects = await res.json();
       }
+      loadingEl.style.display = 'none';
       renderProjects(allProjects);
     } catch (err) {
-      projectsContainer.innerHTML = `
-        <div class="card" style="text-align: center; color: #EF4444; padding: 30px;">
-          <p style="font-weight: 700;">Error al cargar proyectos: ${err.message}</p>
-          <button class="btn btn-outline" id="btn-retry-portal" style="margin-top: 10px;">Reintentar</button>
+      loadingEl.style.display = 'none';
+      projectsContainer.style.display = 'none';
+      emptyEl.style.display = 'block';
+      emptyEl.innerHTML = `
+        <div class="card" style="text-align: center; padding: 24px;">
+          <p style="font-weight: 600; font-size: 14px; color: var(--color-fail-text);">Error al cargar proyectos: ${err.message}</p>
+          <button class="btn btn-outline btn-sm" id="btn-retry-portal" style="margin-top: 12px; width: auto;">Reintentar</button>
         </div>
       `;
-      const retryBtn = projectsContainer.querySelector('#btn-retry-portal');
-      if (retryBtn) retryBtn.addEventListener('click', loadProjects);
+      const retryBtn = emptyEl.querySelector('#btn-retry-portal');
+      if (retryBtn) retryBtn.addEventListener('click', () => {
+        emptyEl.style.display = 'none';
+        loadingEl.style.display = 'block';
+        loadProjects();
+      });
     }
   }
 
   function openArchiveModal(project, action) {
     pendingArchive = { id: project.id, name: project.name, action };
     modalTitle.innerText = action === 'archive'
-      ? `📦 ${t('portal.archive_title')}`
-      : `♻️ ${t('portal.restore_title')}`;
+      ? t('portal.archive_title')
+      : t('portal.restore_title');
     modalDesc.innerText = action === 'archive'
       ? t('portal.archive_desc').replace('{name}', project.name)
       : t('portal.restore_desc').replace('{name}', project.name);
@@ -149,74 +155,63 @@ export async function renderProjectPortalView(container, onSelectProject, onOpen
 
   function renderProjects(projects) {
     if (projects.length === 0) {
-      projectsContainer.innerHTML = `
-        <div class="card" style="text-align: center; padding: 40px; color: var(--color-text-muted);">
-          <div style="font-size: 32px; margin-bottom: 8px;">📂</div>
-          <p style="font-weight: 700; font-size: 14px; color: #334155;">${t('portal.empty')}</p>
-          <button class="btn btn-primary" id="btn-empty-create" style="margin-top: 14px;">
+      projectsContainer.style.display = 'none';
+      emptyEl.style.display = 'block';
+      emptyEl.innerHTML = `
+        <div class="card" style="text-align: center; padding: 32px 20px;">
+          <div style="display: flex; justify-content: center; margin-bottom: 12px; color: var(--color-text-muted);">
+            ${icon('package', 32, 1.5)}
+          </div>
+          <p style="font-weight: 600; font-size: 14px; color: var(--color-text-primary);">${t('portal.empty')}</p>
+          <button class="btn btn-primary btn-sm" id="btn-empty-create" style="margin-top: 14px; width: auto;">
             ${t('nav.new_project')}
           </button>
         </div>
       `;
-      const emptyCreate = projectsContainer.querySelector('#btn-empty-create');
+      const emptyCreate = emptyEl.querySelector('#btn-empty-create');
       if (emptyCreate) emptyCreate.addEventListener('click', () => onOpenProjectSetup());
       return;
     }
 
+    emptyEl.style.display = 'none';
+    projectsContainer.style.display = 'block';
+
     projectsContainer.innerHTML = projects.map(p => `
-      <div class="card project-card" data-id="${p.id}" style="cursor: pointer; transition: transform 0.15s ease, box-shadow 0.15s ease; border-left: 4px solid ${showingArchived ? '#94A3B8' : '#0284C7'}; position: relative;">
-        <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 10px;">
-          <div style="flex: 1;">
-            <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
-              <span style="font-size: 11px; font-weight: 800; color: #0284C7; background: #E0F2FE; padding: 2px 8px; border-radius: 6px; letter-spacing: 0.5px;">
-                ${p.id}
-              </span>
-              ${showingArchived ? `<span style="font-size: 11px; font-weight: 700; color: #64748B; background: #F1F5F9; padding: 2px 8px; border-radius: 6px;">📦 ${t('portal.archived_badge')}</span>` : ''}
-            </div>
-            <h3 style="font-size: 16px; font-weight: 800; color: #0F172A; margin: 8px 0 4px 0; line-height: 1.3;">
-              ${p.name}
-            </h3>
-            <div style="font-size: 12px; color: var(--color-text-secondary); margin-bottom: 8px;">
-              🏢 <strong>${p.entity || ''}</strong> • 📍 ${p.location || 'Perú'}
-            </div>
-            ${p.road_section ? `
-              <div style="font-size: 12px; color: var(--color-text-muted); margin-bottom: 10px;">
-                🛣️ Tramo: ${p.road_section}
-              </div>
-            ` : ''}
+      <div class="plain-list-item" data-id="${p.id}" role="button" tabindex="0" aria-label="${p.name.replace(/"/g, '&quot;')}">
+        <div class="plain-list-main">
+          <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 4px;">
+            <span class="id-chip">${p.id}</span>
+            ${showingArchived ? `<span class="id-chip" style="background: var(--color-surface-hover); color: var(--color-text-muted);">${t('portal.archived_badge')}</span>` : ''}
           </div>
-          <div style="display: flex; flex-direction: column; gap: 8px; align-items: center;">
-            ${!showingArchived ? `
-            <button class="btn-archive" data-id="${p.id}" data-name="${p.name.replace(/"/g, '&quot;')}"
-              title="${t('portal.archive_title')}"
-              style="background: none; border: none; font-size: 16px; cursor: pointer; padding: 4px;" >
-              📦
-            </button>` : `
-            <button class="btn-restore" data-id="${p.id}" data-name="${p.name.replace(/"/g, '&quot;')}"
-              title="${t('portal.restore_title')}"
-              style="background: none; border: none; font-size: 16px; cursor: pointer; padding: 4px;">
-              ♻️
-            </button>`}
-            <span style="display: inline-flex; align-items: center; justify-content: center; width: 36px; height: 36px; background: #F0F9FF; color: #0284C7; border-radius: 50%; font-size: 18px; font-weight: bold;">
-              →
-            </span>
+          <div class="plain-list-title">${p.name}</div>
+          <div class="plain-list-meta">
+            ${icon('building', 13)}<span>${p.entity || ''}</span>
+            <span aria-hidden="true">•</span>
+            ${icon('map-pin', 13)}<span>${p.location || 'Perú'}</span>
+            ${p.road_section ? `<span aria-hidden="true">•</span>${icon('road', 13)}<span>Tramo: ${p.road_section}</span>` : ''}
           </div>
         </div>
+        ${!showingArchived ? `
+        <button class="icon-btn btn-archive" data-id="${p.id}" data-name="${p.name.replace(/"/g, '&quot;')}"
+          title="${t('portal.archive_title')}" aria-label="${t('portal.archive_title')}">
+          ${icon('archive', 17)}
+        </button>` : `
+        <button class="icon-btn btn-restore" data-id="${p.id}" data-name="${p.name.replace(/"/g, '&quot;')}"
+          title="${t('portal.restore_title')}" aria-label="${t('portal.restore_title')}">
+          ${icon('archive-restore', 17)}
+        </button>`}
+        <span class="list-chevron">${icon('chevron-right', 18)}</span>
       </div>
     `).join('');
 
-    projectsContainer.querySelectorAll('.project-card').forEach(card => {
-      card.addEventListener('mouseenter', () => {
-        card.style.transform = 'translateY(-2px)';
-        card.style.boxShadow = '0 6px 16px rgba(0,0,0,0.08)';
-      });
-      card.addEventListener('mouseleave', () => {
-        card.style.transform = 'translateY(0)';
-        card.style.boxShadow = '';
-      });
-      card.addEventListener('click', (e) => {
+    projectsContainer.querySelectorAll('.plain-list-item').forEach(item => {
+      const open = (e) => {
         if (e.target.closest('.btn-archive') || e.target.closest('.btn-restore')) return;
-        onSelectProject(card.getAttribute('data-id'));
+        onSelectProject(item.getAttribute('data-id'));
+      };
+      item.addEventListener('click', open);
+      item.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(e); }
       });
     });
 
@@ -237,12 +232,15 @@ export async function renderProjectPortalView(container, onSelectProject, onOpen
   toggleArchivedBtn.addEventListener('click', () => {
     showingArchived = !showingArchived;
     toggleArchivedBtn.innerHTML = showingArchived
-      ? `📂 ${t('portal.show_active')}`
-      : `📦 ${t('portal.show_archived')}`;
+      ? `<span style="display: inline-flex; vertical-align: -3px; margin-right: 6px;">${icon('package', 15)}</span>${t('portal.show_active')}`
+      : `<span style="display: inline-flex; vertical-align: -3px; margin-right: 6px;">${icon('archive', 15)}</span>${t('portal.show_archived')}`;
+    loadingEl.style.display = 'block';
+    projectsContainer.style.display = 'none';
+    emptyEl.style.display = 'none';
     loadProjects();
   });
 
-  // Header search (🔍 icon in the app header): filter the project list.
+  // Header search: filter the project list.
   // Registered here so it only appears on the portal view.
   function applySearchFilter(rawQuery) {
     const q = String(rawQuery || '').toLowerCase().trim();
