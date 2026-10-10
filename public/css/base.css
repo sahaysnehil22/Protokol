@@ -1,44 +1,67 @@
-/* PROTOKOL — Professional Light Theme for Civil Infrastructure */
+/* PROTOKOL — Refined Native-Quality Design System
+   Restrained, iOS-HIG-inspired. Understated, not flashy. */
 :root {
-  --color-bg: #F8FAFC;          /* Clean light gray background */
-  --color-surface: #FFFFFF;     /* Pure white cards */
-  --color-surface-subtle: #F1F5F9;
-  --color-surface-hover: #F8FAFC;
-  --color-border: #E2E8F0;      /* Crisp slate border */
-  --color-border-strong: #CBD5E1;
-  
-  --color-text-primary: #0F172A;   /* Sharp dark slate for sunlight legibility */
-  --color-text-secondary: #475569; /* Balanced secondary text */
-  --color-text-muted: #64748B;
-  
-  --color-primary: #0284C7;        /* Engineering blue */
-  --color-primary-hover: #0369A1;
-  --color-primary-subtle: #E0F2FE;
-  
-  --color-pass: #059669;           /* Clean emerald green */
-  --color-pass-bg: #ECFDF5;
-  --color-pass-border: #A7F3D0;
-  --color-pass-text: #065F46;
-  
-  --color-provisional: #D97706;    /* Amber */
-  --color-provisional-bg: #FFFBEB;
-  --color-provisional-border: #FDE68A;
-  --color-provisional-text: #92400E;
-  
-  --color-fail: #DC2626;           /* Crimson */
-  --color-fail-bg: #FEF2F2;
-  --color-fail-border: #FECACA;
-  --color-fail-text: #991B1B;
+  --color-bg: #F5F6F8;          /* Soft neutral gray */
+  --color-surface: #FFFFFF;     /* White surfaces */
+  --color-surface-subtle: #F5F6F8;
+  --color-surface-hover: #F0F1F4;
+  --color-border: #E2E6EC;      /* Subtle cool gray */
+  --color-border-strong: #C9D1DC;
 
-  --color-online: #10B981;
-  --color-offline: #EF4444;
+  --color-text-primary: #172033;   /* Deep charcoal/navy */
+  --color-text-secondary: #687386; /* Muted slate */
+  --color-text-muted: #8A94A6;
 
-  --font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-  --touch-target-min: 52px;
-  --border-radius: 10px;
+  --color-primary: #2878B8;        /* Sophisticated muted blue */
+  --color-primary-hover: #1F639A;
+  --color-primary-subtle: #E8F1F8;
+  --color-primary-text: #1A5A8A;
+
+  --color-pass: #27845A;           /* Restrained green */
+  --color-pass-bg: #EAF4EE;
+  --color-pass-border: #BFDCC9;
+  --color-pass-text: #1D6544;
+
+  --color-provisional: #B7791F;    /* Muted amber */
+  --color-provisional-bg: #FBF6E9;
+  --color-provisional-border: #EAD9A8;
+  --color-provisional-text: #7A5410;
+
+  --color-fail: #C93A3A;           /* Accessible red */
+  --color-fail-bg: #FBEBEB;
+  --color-fail-border: #EFC3C3;
+  --color-fail-text: #932727;
+
+  --color-online: #27845A;
+  --color-offline: #C93A3A;
+
+  /* Typography — system stack, hierarchy via size/weight/spacing */
+  --font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-size-title: 20px;        /* Page titles */
+  --font-size-headline: 17px;     /* Section / item titles */
+  --font-size-body: 15px;         /* Body text */
+  --font-size-sub: 13px;          /* Secondary / metadata */
+  --font-size-caption: 11px;      /* Captions, labels */
+
+  --touch-target-min: 44px;       /* iOS HIG minimum */
+  --border-radius: 8px;
   --border-radius-sm: 6px;
-  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
-  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.07), 0 2px 4px -2px rgba(0, 0, 0, 0.05);
+  --shadow-sm: 0 1px 2px rgba(23, 32, 51, 0.06);
+  --shadow-md: 0 2px 8px rgba(23, 32, 51, 0.08);
+
+  /* Spacing scale */
+  --space-xs: 4px;
+  --space-sm: 8px;
+  --space-md: 12px;
+  --space-lg: 16px;
+  --space-xl: 24px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
 }
 
 * {
@@ -60,74 +83,118 @@ body {
   overflow-x: hidden;
 }
 
-/* App Header */
+/* App Header — compact, native */
 header.app-header {
   position: sticky;
   top: 0;
   z-index: 100;
-  background-color: #FFFFFF;
+  background-color: rgba(255, 255, 255, 0.96);
+  -webkit-backdrop-filter: saturate(180%) blur(12px);
+  backdrop-filter: saturate(180%) blur(12px);
   border-bottom: 1px solid var(--color-border);
-  box-shadow: var(--shadow-sm);
-  padding: 12px 16px;
+  padding: 8px 12px;
+  padding-top: max(8px, env(safe-area-inset-top));
   display: flex;
   align-items: center;
   justify-content: space-between;
+  min-height: 52px;
 }
 
 .brand {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   text-decoration: none;
   color: inherit;
+  min-height: var(--touch-target-min);
 }
 
-.brand-icon {
-  font-size: 22px;
+.brand-mark {
+  width: 28px;
+  height: 28px;
+  border-radius: 7px;
+  background: var(--color-primary);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
 }
 
 .brand-logo {
-  font-size: 19px;
-  font-weight: 800;
-  letter-spacing: -0.5px;
-  color: #0F172A;
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: -0.3px;
+  color: var(--color-text-primary);
+  line-height: 1.2;
 }
 
 .brand-subtitle {
-  font-size: 11px;
+  font-size: 10px;
   color: var(--color-text-muted);
   font-weight: 600;
   text-transform: uppercase;
-  letter-spacing: 0.5px;
+  letter-spacing: 0.6px;
+  line-height: 1.2;
 }
 
-/* Network Status Indicator */
+/* Header icon buttons — native style */
+.hbtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 36px;
+  height: 36px;
+  padding: 0 8px;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--color-text-secondary);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.hbtn:active {
+  background: var(--color-surface-hover);
+}
+
+.hbtn-bordered {
+  border-color: var(--color-border);
+  background: var(--color-surface);
+}
+
+/* Network Status Indicator — subtle */
 .status-pill {
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 6px 12px;
-  border-radius: 20px;
-  font-size: 12px;
-  font-weight: 700;
-  background-color: var(--color-surface-subtle);
+  padding: 6px 10px;
+  border-radius: 8px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+  background-color: var(--color-surface);
   border: 1px solid var(--color-border);
   color: var(--color-text-secondary);
   cursor: pointer;
   user-select: none;
+  min-height: 36px;
 }
 
 .status-dot {
-  width: 8px;
-  height: 8px;
+  width: 7px;
+  height: 7px;
   border-radius: 50%;
   background-color: var(--color-online);
+  flex-shrink: 0;
 }
 
 .status-pill.offline {
-  background-color: #FEF2F2;
-  border-color: #FECACA;
-  color: #991B1B;
+  background-color: var(--color-fail-bg);
+  border-color: var(--color-fail-border);
+  color: var(--color-fail-text);
 }
 
 .status-pill.offline .status-dot {
@@ -135,26 +202,141 @@ header.app-header {
 }
 
 .status-pill.syncing {
-  background-color: #FFFBEB;
-  border-color: #FDE68A;
-  color: #92400E;
+  background-color: var(--color-provisional-bg);
+  border-color: var(--color-provisional-border);
+  color: var(--color-provisional-text);
 }
 
 .status-pill.syncing .status-dot {
-  background-color: #F59E0B;
+  background-color: var(--color-provisional);
 }
 
 main#app-content {
   flex: 1;
-  padding: 16px;
-  max-width: 620px;
+  padding: 16px 12px;
+  padding-bottom: max(16px, env(safe-area-inset-bottom));
+  max-width: 640px;
   margin: 0 auto;
   width: 100%;
 }
 
 @media (min-width: 768px) {
   main#app-content {
-    max-width: 780px;
-    padding: 24px;
+    max-width: 760px;
+    padding: 24px 16px;
   }
+}
+
+/* Page heading — compact hierarchy */
+.page-head {
+  margin-bottom: 16px;
+}
+
+.page-head h1 {
+  font-size: var(--font-size-title);
+  font-weight: 700;
+  letter-spacing: -0.3px;
+  color: var(--color-text-primary);
+  margin: 0;
+  line-height: 1.25;
+}
+
+.page-head p {
+  font-size: var(--font-size-sub);
+  color: var(--color-text-secondary);
+  margin: 4px 0 0 0;
+  line-height: 1.4;
+}
+
+/* Refined list — dividers, not cards */
+.plain-list {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--border-radius);
+  overflow: hidden;
+}
+
+.plain-list-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  min-height: 64px;
+  cursor: pointer;
+  border-bottom: 1px solid var(--color-border);
+  -webkit-tap-highlight-color: transparent;
+}
+
+.plain-list-item:last-child {
+  border-bottom: none;
+}
+
+.plain-list-item:active {
+  background: var(--color-surface-hover);
+}
+
+.plain-list-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.plain-list-title {
+  font-size: var(--font-size-body);
+  font-weight: 600;
+  color: var(--color-text-primary);
+  line-height: 1.35;
+  overflow-wrap: break-word;
+}
+
+.plain-list-meta {
+  font-size: var(--font-size-sub);
+  color: var(--color-text-secondary);
+  margin-top: 3px;
+  line-height: 1.4;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.plain-list-meta svg {
+  flex-shrink: 0;
+  opacity: 0.7;
+}
+
+.id-chip {
+  display: inline-block;
+  font-size: var(--font-size-caption);
+  font-weight: 700;
+  letter-spacing: 0.4px;
+  color: var(--color-primary-text);
+  background: var(--color-primary-subtle);
+  padding: 2px 7px;
+  border-radius: 5px;
+  white-space: nowrap;
+}
+
+.list-chevron {
+  color: var(--color-text-muted);
+  flex-shrink: 0;
+  display: flex;
+}
+
+.icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  border: none;
+  background: transparent;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  flex-shrink: 0;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.icon-btn:active {
+  background: var(--color-surface-hover);
 }

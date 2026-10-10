@@ -61,14 +61,14 @@
 
 .form-label {
   display: block;
-  font-size: 14px;
-  font-weight: 700;
-  color: #1E293B;
+  font-size: var(--font-size-sub);
+  font-weight: 600;
+  color: var(--color-text-primary);
   margin-bottom: 6px;
 }
 
 .form-label-hint {
-  font-size: 12px;
+  font-size: var(--font-size-caption);
   color: var(--color-text-muted);
   font-weight: normal;
   display: block;
@@ -85,18 +85,18 @@
   width: 100%;
   min-height: var(--touch-target-min);
   background-color: #FFFFFF;
-  border: 1.5px solid var(--color-border-strong);
+  border: 1px solid var(--color-border-strong);
   border-radius: var(--border-radius-sm);
-  color: #0F172A;
-  font-size: 16px;
+  color: var(--color-text-primary);
+  font-size: 16px; /* Prevents iOS zoom on focus */
   padding: 10px 14px;
-  transition: all 0.15s ease-in-out;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
   outline: none;
 }
 
 .form-input:focus {
   border-color: var(--color-primary);
-  box-shadow: 0 0 0 3px rgba(2, 132, 199, 0.15);
+  box-shadow: 0 0 0 3px rgba(40, 120, 184, 0.15);
 }
 
 .input-unit {
@@ -156,7 +156,7 @@
 .checklist-text {
   font-size: 14px;
   font-weight: 700;
-  color: #0F172A;
+  color: var(--color-text-primary);
 }
 
 /* Camera & Photo Upload */
@@ -238,7 +238,7 @@
 }
 
 .criteria-hint strong {
-  color: #0F172A;
+  color: var(--color-text-primary);
 }
 
 /* Real-Time Live Validation Styles */
@@ -309,12 +309,12 @@
 .btn-fc-chip:hover {
   border-color: var(--color-primary);
   background: #E0F2FE;
-  color: #0284C7;
+  color: var(--color-primary);
 }
 
 .btn-fc-chip.active {
-  background: #0284C7;
-  border-color: #0284C7;
+  background: var(--color-primary);
+  border-color: var(--color-primary);
   color: #FFFFFF;
   box-shadow: 0 2px 4px rgba(2, 132, 199, 0.25);
 }
